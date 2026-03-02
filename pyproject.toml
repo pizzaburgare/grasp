@@ -1,0 +1,11 @@
+[project]
+name = "ai-courses"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "manim>=0.20.1",
+    "moviepy>=2.2.1",
+    "piper-tts>=1.4.1",
+]
