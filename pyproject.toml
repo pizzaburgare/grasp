@@ -15,5 +15,6 @@ dependencies = [
     "numpy>=2.4.2",
     "openai>=2.24.0",
     "piper-tts>=1.4.1",
+    "pre-commit>=4.5.1",
     "python-dotenv>=1.2.2",
 ]
