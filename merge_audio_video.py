@@ -1,4 +1,4 @@
-from moviepy import VideoFileClip, AudioFileClip # type: ignore
+from moviepy import AudioFileClip, VideoFileClip  # type: ignore
 
 # 1. Load the video and the audio file
 video = VideoFileClip("media/videos/main/480p15/StepByStepQR.mp4")

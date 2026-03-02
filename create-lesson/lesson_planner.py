@@ -1,11 +1,11 @@
 import os
-import numpy as np
+
 from dotenv import load_dotenv
+from langchain.agents import create_agent
+from langchain_core.messages import SystemMessage  # type: ignore
+from langchain_core.tools import tool  # type: ignore
+from langchain_openai import ChatOpenAI  # type: ignore
 from pydantic import SecretStr
-from langchain_openai import ChatOpenAI # type: ignore
-from langchain_core.tools import tool# type: ignore
-from langchain_core.messages import SystemMessage # type: ignore
-from langchain.agents import create_agent 
 
 load_dotenv()
 
@@ -14,7 +14,7 @@ COURSE = "FMNF05"
 TOPIC = "LU decomposition"
 MODEL = "liquid/lfm-2.5-1.2b-thinking:free"
 
-# 1. Define the LLM 
+# 1. Define the LLM
 llm = ChatOpenAI(
     model=MODEL,
     api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
@@ -22,8 +22,9 @@ llm = ChatOpenAI(
     default_headers={
         "HTTP-Referer": "http://localhost",
         "X-Title": "Math Lesson Agent",
-    }
+    },
 )
+
 
 # --- Tools ---
 @tool
@@ -43,9 +44,10 @@ with open("create-lesson/prompt.md", "r") as f:
 agent_executor = create_agent(llm, system_prompt=system_content)
 
 # 5. Execution
+
 messages = [SystemMessage(content=system_content)]
 
-response = agent_executor.invoke({"messages": messages}) 
+response = agent_executor.invoke({"messages": messages})  # type: ignore
 
 # Print the last message in the conversation (the result)
 print(response["messages"][-1].content)

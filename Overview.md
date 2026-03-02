@@ -6,7 +6,7 @@ This architecture breaks the process down into five distinct phases: Data Ingest
 Before the LLM can generate a plan, it needs to understand the material in a structured way.
 
 * **Document Parsers:** Extract text from PDFs, slides, and text files. You might need OCR (like Tesseract) for scanned previous exams.
-* **Chunking Strategy:** Split the raw text into logical, bite-sized chunks (e.g., by paragraph or slide). 
+* **Chunking Strategy:** Split the raw text into logical, bite-sized chunks (e.g., by paragraph or slide).
 * **Vector Database:** Embed these chunks using an embedding model and store them in a Vector DB (like Chroma, Pinecone, or Qdrant). Keep exercises and exams tagged separately from lecture materials so the LLM knows what to use for teaching vs. testing.
 * **Summarization Engine:** Run a map-reduce summarization over the materials to create a "Global Context Document."
 
@@ -14,7 +14,7 @@ Before the LLM can generate a plan, it needs to understand the material in a str
 Instead of reading all the raw content, the LLM uses the Global Context Document to plan.
 
 1.  **Analyze Goals:** The LLM reviews the summaries of the lectures and the topics covered in previous exams to determine what the student *actually* needs to know.
-2.  **Generate Learning Plan (JSON/YAML):** The LLM outputs a structured syllabus. 
+2.  **Generate Learning Plan (JSON/YAML):** The LLM outputs a structured syllabus.
     * *Example Output:* Module 1 -> Lesson 1.1 -> Key Concepts -> Required Exercises -> Animation Concept.
 
 ## Phase 3: Detail Generation (The "Content Agent")
