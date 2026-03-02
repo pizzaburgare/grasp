@@ -1,7 +1,5 @@
 # Architecture: AI-Powered Course Generation Pipeline
 
-
-
 This architecture breaks the process down into five distinct phases: Data Ingestion, High-Level Planning, Detail Generation, Media Generation, and Delivery.
 
 ## Phase 1: Data Ingestion & Preprocessing (The Knowledge Base)

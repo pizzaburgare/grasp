@@ -5,7 +5,15 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "fastmcp>=3.0.2",
+    "langchain>=1.2.10",
+    "langchain-openai>=1.1.10",
+    "langgraph>=1.0.10",
     "manim>=0.20.1",
+    "markitdown[docx,pdf,pptx]>=0.1.5",
     "moviepy>=2.2.1",
+    "numpy>=2.4.2",
+    "openai>=2.24.0",
     "piper-tts>=1.4.1",
+    "python-dotenv>=1.2.2",
 ]

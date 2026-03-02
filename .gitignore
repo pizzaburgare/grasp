@@ -1,5 +1,6 @@
 media
 .DS_Store
+course
 
 *.mp4
 *.wav
