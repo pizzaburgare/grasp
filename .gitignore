@@ -9,7 +9,8 @@ input
 *.onnx
 .vscode
 
-tts/models
+models/
+.cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

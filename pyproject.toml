@@ -27,5 +27,5 @@ dev = [
 
 [tool.ruff.lint.per-file-ignores]
 # Manim scenes use `from manim import *` by convention
-"main.py" = ["F403", "F405"]
+".cache/scripts/lesson.py" = ["F403", "F405"]
 "output/*/lesson.py" = ["F403", "F405"]

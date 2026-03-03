@@ -2,7 +2,7 @@
 Input File Processor
 Scans an input directory and converts all files into LLM-ready content:
 - PDFs: each page rendered as a JPEG image
-- Videos: sampled at 1 fps into base64 JPEG frames (Google AI Studio approach)
+- Videos: sampled at 1 fps into base64 JPEG frames
 - Images: base64-encoded directly
 - Text/Markdown: read as-is
 """
@@ -19,20 +19,16 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# Supported file extensions by category
 TEXT_EXTENSIONS = {".txt", ".md", ".markdown", ".rst", ".csv"}
 PDF_EXTENSIONS = {".pdf"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
-# Default cap: 120 frames ≈ 2 min video at 1 fps
 MAX_VIDEO_FRAMES = 120
-# Default cap: 30 pages per PDF (enough for a full lecture slide deck)
 MAX_PDF_PAGES = 30
 
 
 def _encode_image_file(path: Path) -> str:
-    """Read an image file and return a data-URI string."""
     suffix = path.suffix.lower()
     mime = {
         ".png": "image/png",
@@ -42,13 +38,11 @@ def _encode_image_file(path: Path) -> str:
         ".webp": "image/webp",
         ".bmp": "image/bmp",
     }.get(suffix, "image/jpeg")
-
     data = base64.b64encode(path.read_bytes()).decode()
     return f"data:{mime};base64,{data}"
 
 
 def _frame_to_data_uri(frame: np.ndarray, quality: int = 70) -> str:
-    """Convert a numpy frame (H,W,3 uint8) to a JPEG data-URI."""
     img = Image.fromarray(frame)
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=quality)
@@ -56,24 +50,15 @@ def _frame_to_data_uri(frame: np.ndarray, quality: int = 70) -> str:
     return f"data:image/jpeg;base64,{data}"
 
 
-def extract_pdf_pages(path: Path, scale: int = 1, max_pages: int = MAX_PDF_PAGES) -> list[str]:
-    """
-    Render each page of a PDF as a JPEG data-URI.
-
-    Args:
-        path: Path to the PDF file
-        scale: Render scale factor (1 = ~72 dpi, sufficient for slide content)
-        max_pages: Maximum number of pages to render
-
-    Returns:
-        List of base64 JPEG data-URIs, one per page
-    """
+def extract_pdf_pages(
+    path: Path, scale: int = 1, max_pages: int = MAX_PDF_PAGES
+) -> list[str]:
+    """Render each page of a PDF as a JPEG data-URI."""
     doc = pdfium.PdfDocument(str(path))
     n_pages = min(len(doc), max_pages)
     if len(doc) > max_pages:
         logger.warning(
-            "PDF %s has %d pages; capping to %d",
-            path.name, len(doc), max_pages,
+            "PDF %s has %d pages; capping to %d", path.name, len(doc), max_pages
         )
     uris: list[str] = []
     for i, page in enumerate(doc):
@@ -94,12 +79,7 @@ def extract_video_frames(
     fps: int = 1,
     max_frames: int = MAX_VIDEO_FRAMES,
 ) -> list[str]:
-    """
-    Sample a video at *fps* frames per second and return base64 data-URIs.
-
-    This mirrors Google AI Studio's approach: the model receives a sequence of
-    still images that represent the video content, one per second by default.
-    """
+    """Sample a video at *fps* frames per second and return base64 data-URIs."""
     clip = VideoFileClip(str(path))
     duration = clip.duration
     interval = 1.0 / fps
@@ -113,39 +93,28 @@ def extract_video_frames(
             fps,
             max_frames,
         )
-        # Sample evenly across the video
         step = len(timestamps) / max_frames
         timestamps = [timestamps[int(i * step)] for i in range(max_frames)]
 
     uris: list[str] = []
     for t in timestamps:
-        frame = clip.get_frame(t)
-        uris.append(_frame_to_data_uri(frame))
-
+        uris.append(_frame_to_data_uri(clip.get_frame(t)))
     clip.close()
     return uris
 
 
 def process_input_dir(
-    input_dir: str | Path,
-    max_video_frames: int = MAX_VIDEO_FRAMES,
+    input_dir: str | Path, max_video_frames: int = MAX_VIDEO_FRAMES
 ) -> list[dict]:
     """
-    Walk *input_dir* and return a list of LangChain-compatible content parts.
-
-    Each element is a dict suitable for inclusion in
-    ``HumanMessage(content=[...])``:
-      - ``{"type": "text", "text": "..."}``
-      - ``{"type": "image_url", "image_url": {"url": "data:..."}}``
-
-    Files are sorted alphabetically so ordering is deterministic.
+    Walk *input_dir* and return a list of LangChain-compatible content parts
+    (``{"type": "text", ...}`` or ``{"type": "image_url", ...}``).
     """
     input_path = Path(input_dir)
     if not input_path.is_dir():
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 
     parts: list[dict] = []
-
     files = sorted(
         f for f in input_path.rglob("*") if f.is_file() and not f.name.startswith(".")
     )
@@ -158,13 +127,10 @@ def process_input_dir(
         ext = file.suffix.lower()
         rel = file.relative_to(input_path)
 
-        # --- plain text ---
         if ext in TEXT_EXTENSIONS:
             text = file.read_text(errors="replace")
             parts.append({"type": "text", "text": f"--- File: {rel} ---\n{text}"})
-            logger.info("Loaded text: %s", rel)
 
-        # --- PDFs: render each page as an image ---
         elif ext in PDF_EXTENSIONS:
             page_uris = extract_pdf_pages(file)
             parts.append(
@@ -172,17 +138,13 @@ def process_input_dir(
             )
             for uri in page_uris:
                 parts.append({"type": "image_url", "image_url": {"url": uri}})
-            logger.info("Rendered %d PDF pages: %s", len(page_uris), rel)
 
-        # --- images ---
         elif ext in IMAGE_EXTENSIONS:
             parts.append({"type": "text", "text": f"[Image: {rel}]"})
             parts.append(
                 {"type": "image_url", "image_url": {"url": _encode_image_file(file)}}
             )
-            logger.info("Loaded image: %s", rel)
 
-        # --- videos (1 fps frame extraction) ---
         elif ext in VIDEO_EXTENSIONS:
             frame_uris = extract_video_frames(file, fps=1, max_frames=max_video_frames)
             parts.append(
@@ -193,7 +155,6 @@ def process_input_dir(
             )
             for uri in frame_uris:
                 parts.append({"type": "image_url", "image_url": {"url": uri}})
-            logger.info("Extracted %d frames from video: %s", len(frame_uris), rel)
 
         else:
             logger.debug("Skipping unsupported file: %s", rel)

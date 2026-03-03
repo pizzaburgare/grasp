@@ -6,8 +6,9 @@ import numpy as np
 from manim import Scene
 from piper.voice import PiperVoice
 
-MODEL_PATH = "tts/models/en_US-ryan-high.onnx"
-CONFIG_PATH = "tts/models/en_US-ryan-high.onnx.json"
+_ROOT = Path(__file__).resolve().parent.parent
+MODEL_PATH = str(_ROOT / "models" / "en_US-ryan-high.onnx")
+CONFIG_PATH = str(_ROOT / "models" / "en_US-ryan-high.onnx.json")
 CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
 
@@ -37,7 +38,7 @@ def create_wav(text_to_speak: str, i: int) -> float:
     total_frames = total_bytes_written // (CHANNELS * SAMPLE_WIDTH)
     return (
         total_frames / voice.config.sample_rate
-    ) + 1  # Add 0.5 seconds buffer for safety
+    ) + 1  # Add 1 second buffer for safety
 
 
 class AudioManager:
@@ -51,7 +52,6 @@ class AudioManager:
         print(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
         self.i += 1
         self.times.append(self.scene.renderer.time)
-        # Say time and log how long the audio will be
         duration = create_wav(text, self.i)
         self.audio_durations.append(duration)
         print(f"AudioManager: Audio duration is {duration:.2f} seconds")
@@ -74,36 +74,27 @@ class AudioManager:
 
         audio_dir = _audio_dir()
 
-        # Read the first audio file to get format info
         with wave.open(str(audio_dir / "audio_1.wav"), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             n_channels = wav_file.getnchannels()
             sample_width = wav_file.getsampwidth()
 
-        # Calculate total duration needed
         last_time = self.times[-1]
         last_duration = self.audio_durations[-1]
         total_duration = last_time + last_duration
-        total_frames = int(total_duration * sample_rate) + sample_rate  # Add buffer
+        total_frames = int(total_duration * sample_rate) + sample_rate  # add buffer
 
-        # Create output buffer filled with silence
         audio_data = np.zeros(total_frames, dtype=np.int16)
 
-        # Merge all audio files
         for audio_idx in range(1, self.i + 1):
             with wave.open(str(audio_dir / f"audio_{audio_idx}.wav"), "rb") as wav_file:
                 frames = wav_file.readframes(wav_file.getnframes())
                 audio_chunk = np.frombuffer(frames, dtype=np.int16)
 
-                # Calculate where to place this audio
-                start_time = self.times[audio_idx - 1]
-                start_frame = int(start_time * sample_rate)
-
-                # Write audio to the correct position
+                start_frame = int(self.times[audio_idx - 1] * sample_rate)
                 end_frame = start_frame + len(audio_chunk)
                 audio_data[start_frame:end_frame] = audio_chunk
 
-        # Write merged audio to file
         merged_path = audio_dir / "merged_audio.wav"
         with wave.open(str(merged_path), "wb") as wav_file:
             wav_file.setnchannels(n_channels)
