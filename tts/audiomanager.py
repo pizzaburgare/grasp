@@ -1,4 +1,6 @@
+import os
 import wave
+from pathlib import Path
 
 import numpy as np
 from manim import Scene
@@ -10,11 +12,20 @@ CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
 
 
+def _audio_dir() -> Path:
+    """Return the directory where audio files are written.
+    Respects the AUDIO_OUTPUT_DIR environment variable; defaults to 'media/'."""
+    d = Path(os.environ.get("AUDIO_OUTPUT_DIR", "media"))
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def create_wav(text_to_speak: str, i: int) -> float:
     voice = PiperVoice.load(MODEL_PATH, CONFIG_PATH, use_cuda=True)
 
     total_bytes_written = 0
-    with wave.open(f"media/audio_{i}.wav", "wb") as wav_file:
+    out_path = _audio_dir() / f"audio_{i}.wav"
+    with wave.open(str(out_path), "wb") as wav_file:
         wav_file.setnchannels(CHANNELS)
         wav_file.setsampwidth(SAMPLE_WIDTH)
         wav_file.setframerate(voice.config.sample_rate)
@@ -61,8 +72,10 @@ class AudioManager:
             print("AudioManager: No audio files to merge")
             return
 
+        audio_dir = _audio_dir()
+
         # Read the first audio file to get format info
-        with wave.open("media/audio_1.wav", "rb") as wav_file:
+        with wave.open(str(audio_dir / "audio_1.wav"), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             n_channels = wav_file.getnchannels()
             sample_width = wav_file.getsampwidth()
@@ -78,7 +91,7 @@ class AudioManager:
 
         # Merge all audio files
         for audio_idx in range(1, self.i + 1):
-            with wave.open(f"media/audio_{audio_idx}.wav", "rb") as wav_file:
+            with wave.open(str(audio_dir / f"audio_{audio_idx}.wav"), "rb") as wav_file:
                 frames = wav_file.readframes(wav_file.getnframes())
                 audio_chunk = np.frombuffer(frames, dtype=np.int16)
 
@@ -91,10 +104,11 @@ class AudioManager:
                 audio_data[start_frame:end_frame] = audio_chunk
 
         # Write merged audio to file
-        with wave.open("media/merged_audio.wav", "wb") as wav_file:
+        merged_path = audio_dir / "merged_audio.wav"
+        with wave.open(str(merged_path), "wb") as wav_file:
             wav_file.setnchannels(n_channels)
             wav_file.setsampwidth(sample_width)
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_data.tobytes())
 
-        print(f"AudioManager: Merged {self.i} audio files to media/merged_audio.wav")
+        print(f"AudioManager: Merged {self.i} audio files to {merged_path}")

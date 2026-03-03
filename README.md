@@ -1,25 +1,77 @@
 # AI Courses
 
-## TODOs
-- Upgrade TTS to Qwen3 (maybe have alternative for test/prod?)
+Automated pipeline for generating educational math videos using AI and Manim.
 
-    - https://huggingface.co/spaces/Qwen/Qwen3-TTS
-Prompt
-Speak as a math professor, smart, wise, but compassionate, understanding that students dont currently posess all of his knowlege
+## Quick Start
 
+### Automated Script Generation
 
-- Fix a data pipeline from a concept, so that a model can use RAG, generate a script and pass it onto a model that generates the video
+Generate a complete Manim script automatically using OpenRouter:
 
+```bash
+# Generate a lesson and Manim script in one command
+python generate_course.py "Course Name"
+```
 
-- Correlate color with beräkningar
+**Example usage:**
+```python
+from generate_course import CourseWorkflow
+
+workflow = CourseWorkflow()
+workflow.run_full_pipeline(
+    topic="QR Decomposition",
+    output_script="main.py",
+    output_lesson="lesson.md"  # optional
+)
+```
+
+This will:
+1. Generate a structured lesson plan for the topic
+2. Create a complete Manim Python script in `main.py`
+3. Ready to render with: `manim -pql main.py [SceneName]`
+
+### Manual Process (Legacy)
+
+If you prefer manual control, you can still:
+1. Run `create_lesson/lesson_planner.py` to generate lesson content
+2. Manually create/edit `main.py` with Manim code
+
+## Environment Setup
+
+1. Copy `.env.example` to `.env` (if available) or create `.env`:
+```env
+OPENROUTER_API_KEY=your_key_here
+```
+
+2. Install dependencies:
+```bash
+pip install -e .
+```
 
 ## Pipeline Overview
 
 ```mermaid
 flowchart TD
-    A[1. Generate script for lesson] --> B[2. Generate Python file main which contains Manim and text]
-    B --> C[3a. Generate video MP4<br>using Manim]
-    B --> D[3b. Generate audio file<br>using audiomanager]
-    C --> E[4. Merge audio and video]
-    D --> E
+    A[Topic Input] --> B[1. Generate Lesson Plan<br>via OpenRouter LLM]
+    B --> C[2. Generate Manim Script<br>via OpenRouter LLM]
+    C --> D[main.py created]
+    D --> E[3a. Render Video<br>manim command]
+    D --> F[3b. Generate Audio<br>AudioManager + TTS]
+    E --> G[4. Merge Audio & Video<br>merge_audio_video.py]
+    F --> G
+    G --> H[Final Video Output]
 ```
+
+## Configuration
+
+Edit `generate_course.py` to customize:
+- **Planning Model**: Cheap model for lesson structure (default: `liquid/lfm-2.5-1.2b-thinking:free`)
+- **Script Model**: Code-capable model for Manim generation (default: `google/gemini-2.0-flash-exp:free`)
+- **Course Code**: Change the course identifier (default: `FMNF05`)
+
+## TODOs
+- Upgrade TTS to Qwen3 (maybe have alternative for test/prod?)
+    - https://huggingface.co/spaces/Qwen/Qwen3-TTS
+- Add RAG search for previous exam problems
+- Correlate colors with calculations
+- Add self-correcting execution loop for Manim code (retry on errors)

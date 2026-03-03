@@ -1,6 +1,8 @@
 media
 .DS_Store
 course
+/output
+input
 
 *.mp4
 *.wav

@@ -36,7 +36,7 @@ def rag_search_in_exams(query: str) -> str:
 tools = [rag_search_in_exams]
 
 # 3. Setup the System Prompt
-with open("create-lesson/prompt.md", "r") as f:
+with open("create_lesson/prompt.md", "r") as f:
     system_content = f.read().replace("<topic>", TOPIC)
 
 # 4. Create the Agent

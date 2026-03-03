@@ -10,11 +10,22 @@ dependencies = [
     "langchain-openai>=1.1.10",
     "langgraph>=1.0.10",
     "manim>=0.20.1",
-    "markitdown[docx,pdf,pptx]>=0.1.5",
     "moviepy>=2.2.1",
     "numpy>=2.4.2",
     "openai>=2.24.0",
+    "pillow>=11.0.0",
     "piper-tts>=1.4.1",
     "pre-commit>=4.5.1",
+    "pypdfium2>=4.30.0",
     "python-dotenv>=1.2.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.4",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Manim scenes use `from manim import *` by convention
+"main.py" = ["F403", "F405"]
+"output/*/lesson.py" = ["F403", "F405"]
