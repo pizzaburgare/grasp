@@ -1,39 +1,58 @@
 #!/usr/bin/env python3
 """
-Quick test script to generate a sample audio clip using Qwen3-TTS.
+Quick test script to generate a sample audio clip.
 The audio will be saved to .cache/audio/test_audio.wav
+
+Select the engine with the TTS_ENGINE env var (qwen | piper | kokoro).
+Defaults to kokoro.
 """
 
+import os
+import sys
 import time
-import torch
+
+from src.tts import available_engines  # noqa: E402
+
+ENGINES = available_engines()
+engine_name = os.environ.get("TTS_ENGINE", "kokoro").lower()
+
+if engine_name not in ENGINES:
+    print(f"Unknown engine '{engine_name}'. Choose one of: {', '.join(ENGINES)}")
+    sys.exit(1)
 
 print("=" * 60)
-print("Qwen3-TTS Test Script")
+print(f"TTS Test Script  [{engine_name}]")
 print("=" * 60)
 print()
 
-# Check device
-print("1. Checking compute device...")
-if torch.cuda.is_available():
-    device = "cuda:0"
-    print(f"   ✓ Using CUDA: {torch.cuda.get_device_name(0)}")
-elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-    device = "mps"
-    print("Using MPS (Apple Silicon)")
-    print("Note: MPS can be slow on first run due to compilation")
-else:
-    device = "cpu"
-    print("Using CPU (this will be slow)")
-print()
+# Device info is only relevant for torch-based engines
+if engine_name in ("qwen",):
+    import torch  # noqa: PLC0415
+
+    print("1. Checking compute device...")
+    if torch.cuda.is_available():
+        print(f"Using CUDA: {torch.cuda.get_device_name(0)}")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        print("Using MPS (Apple Silicon)")
+        print("Note: MPS can be slow on first run due to compilation")
+    else:
+        print("Using CPU (this will be slow)")
+    print()
 
 from src.audiomanager import create_wav  # noqa: E402
-from src.tts.qwen import QwenTTSEngine  # noqa: E402
+from src.tts import get_default_engine  # noqa: E402
 
-print("2. Loading Qwen3-TTS model...")
+os.environ["TTS_ENGINE"] = engine_name
+
+print(f"2. Loading {engine_name} model...")
 print()
 start = time.time()
-engine = QwenTTSEngine.from_env()
-engine._load_model()
+engine = get_default_engine()
+# Eagerly load the model if the engine exposes a load helper
+for loader in ("_load_pipeline", "_load_model", "_load_voice"):
+    if callable(getattr(engine, loader, None)):
+        getattr(engine, loader)()
+        break
 load_time = time.time() - start
 print(f"Model loaded in {load_time:.1f}s")
 print()
@@ -41,7 +60,7 @@ print()
 print("3. Generating audio...")
 gen_start = time.time()
 duration = create_wav(
-    "Hello! This is a test of the Qwen3 text to speech system. The quick brown fox jumps over the lazy dog.",
+    "Hello! This is a test of the text to speech system. The quick brown fox jumps over the lazy dog.",
     999,
     engine,
 )
@@ -53,7 +72,8 @@ print()
 print("=" * 60)
 print("SUCCESS!")
 print("=" * 60)
+print(f"Engine:   {engine_name}")
 print(f"Duration: {duration:.2f}s")
-print("File: .cache/audio/audio_999.wav")
+print("File:     .cache/audio/audio_999.wav")
 print()
 print(f"Performance: {duration / gen_time:.2f}x realtime")

@@ -12,6 +12,8 @@ _DEFAULT_MODEL = str(PIPER_DEFAULT_MODEL)
 
 
 class PiperTTSEngine(TTSEngine):
+    ENGINE_NAME = "piper"
+
     def __init__(self, model_path: str = _DEFAULT_MODEL):
         self.model_path = model_path
         self._voice = None

@@ -192,13 +192,17 @@ class CourseWorkflow:
         script_path = cache_scripts / "lesson.py"
         lesson_plan_path = CACHE_LESSON_PLAN
 
+        tts_engine = os.environ.get("TTS_ENGINE", "kokoro").lower()
+
         print("=" * 60)
         print("Starting AI Course Generation Pipeline")
-        print(f"Topic: {topic}")
+        print(f"Topic:      {topic}")
+        print(f"LLM model:  {self.model}")
+        print(f"TTS engine: {tts_engine}")
         if input_dir:
-            print(f"Input dir : {input_dir}")
+            print(f"Input dir:  {input_dir}")
         print(f"Output dir: {out}")
-        print(f"Cache dir : {CACHE_DIR}")
+        print(f"Cache dir:  {CACHE_DIR}")
         print("=" * 60)
 
         # Step 0: Process input materials

@@ -1,17 +1,39 @@
 import os
 
 from .base import TTSEngine
+from .kokoro import KokoroTTSEngine
 from .piper import PiperTTSEngine
 from .qwen import QwenTTSEngine
 
-__all__ = ["TTSEngine", "QwenTTSEngine", "PiperTTSEngine", "get_default_engine"]
+# Registry is built automatically from ENGINE_NAME on each engine class.
+# To add a new engine: create the class with ENGINE_NAME and add it here.
+_REGISTRY: dict[str, type[TTSEngine]] = {
+    cls.ENGINE_NAME: cls  # type: ignore[attr-defined]
+    for cls in (PiperTTSEngine, QwenTTSEngine, KokoroTTSEngine)
+}
+
+_DEFAULT_ENGINE = "kokoro"
+
+__all__ = [
+    "TTSEngine",
+    "QwenTTSEngine",
+    "PiperTTSEngine",
+    "KokoroTTSEngine",
+    "get_default_engine",
+    "available_engines",
+]
+
+
+def available_engines() -> list[str]:
+    """Return the names of all registered TTS engines."""
+    return list(_REGISTRY.keys())
 
 
 def get_default_engine() -> TTSEngine:
-    """Instantiate the TTS engine selected by the TTS_ENGINE env var (default: qwen)."""
-    engine = os.environ.get("TTS_ENGINE", "qwen").lower()
-    if engine == "qwen":
-        return QwenTTSEngine.from_env()
-    if engine == "piper":
-        return PiperTTSEngine.from_env()
-    raise ValueError(f"Unknown TTS_ENGINE '{engine}'. Choose 'qwen' or 'piper'.")
+    """Instantiate the TTS engine selected by the TTS_ENGINE env var."""
+    name = os.environ.get("TTS_ENGINE", _DEFAULT_ENGINE).lower()
+    if name not in _REGISTRY:
+        raise ValueError(
+            f"Unknown TTS_ENGINE '{name}'. Choose one of: {', '.join(_REGISTRY)}."
+        )
+    return _REGISTRY[name].from_env()

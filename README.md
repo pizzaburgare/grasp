@@ -2,84 +2,75 @@
 
 Automated pipeline for generating educational math videos using AI and Manim.
 
-## Quick Start
+## Setup
 
-### Automated Script Generation
-
-Generate a complete Manim script automatically using OpenRouter:
-
-```bash
-# Generate a lesson and Manim script in one command
-python generate_course.py "Course Name"
-```
-
-**Example usage:**
-```python
-from generate_course import CourseWorkflow
-
-workflow = CourseWorkflow()
-workflow.run_full_pipeline(
-    topic="QR Decomposition",
-    output_script="main.py",
-    output_lesson="lesson.md"  # optional
-)
-```
-
-This will:
-1. Generate a structured lesson plan for the topic
-2. Create a complete Manim Python script in `main.py`
-3. Ready to render with: `manim -pql main.py [SceneName]`
-
-### Manual Process (Legacy)
-
-If you prefer manual control, you can still:
-1. Run `create_lesson/lesson_planner.py` to generate lesson content
-2. Manually create/edit `main.py` with Manim code
-
-## Environment Setup
-
-1. Copy `.env.example` to `.env` (if available) or create `.env`:
-```env
-OPENROUTER_API_KEY=your_key_here
-```
-
-2. Install dependencies:
 ```bash
 uv sync
 ```
 
-## Text-to-Speech (Qwen3-TTS)
+> **One-time extra setup for the Kokoro engine** (uv venvs don't ship `pip` by default):
+> ```bash
+> uv pip install pip
+> uv pip install "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+> ```
 
-Audio narration is generated locally using **[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)**.
+Create `.env`:
+```env
+# Required
+OPENROUTER_API_KEY=your_key_here
 
-### Installation
+# TTS engine: "kokoro" (fast, local) | "qwen" (local GPU) | "piper" (fast CPU)
+TTS_ENGINE=kokoro
+
+# Qwen TTS overrides (all optional)
+QWEN_TTS_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base
+QWEN_TTS_LANGUAGE=English
+# Base / voice-clone model — optional path to a reference .wav for voice cloning
+# (falls back to the bundled src/tts/clone.wav if not set):
+QWEN_TTS_REF_AUDIO=
+# Optional transcript of the reference audio (improves clone quality):
+QWEN_TTS_REF_TEXT=
+
+# Piper TTS model path override (optional)
+PIPER_MODEL=models/en_US-ryan-high.onnx
+
+# Kokoro TTS overrides (all optional)
+KOKORO_VOICE=am_adam          # see kokoro docs for available voices
+KOKORO_LANG_CODE=a            # a=American EN, b=British EN, j=Japanese …
+KOKORO_SPEED=1.2
+
+# Output directory for audio clips and merged audio
+AUDIO_OUTPUT_DIR=.cache/audio
+```
+
+## Usage
 
 ```bash
-uv sync                   # installs qwen-tts and other deps
-# optional: FlashAttention 2 for lower VRAM usage on CUDA
+uv run python generate_lesson.py "LU Decomposition"
+uv run python generate_lesson.py "Fourier Transform" --input-dir ./slides
+uv run python generate_lesson.py "QR Decomposition" --final
+```
+
+## Text-to-Speech
+
+Audio narration is generated locally. Three engines are available, selected via `TTS_ENGINE`:
+
+| Engine | Model | Notes |
+|--------|-------|-------|
+| `kokoro` | hexgrad/Kokoro-82M | Fast, high quality, no GPU needed |
+| `qwen` | Qwen/Qwen3-TTS-12Hz-1.7B-Base | GPU recommended; uses bundled `src/tts/clone.wav` for voice cloning by default (override with `QWEN_TTS_REF_AUDIO`) |
+| `piper` | en_US-ryan-high | Fastest, fully offline |
+
+```bash
+# optional: FlashAttention 2 for lower VRAM usage on CUDA (Qwen only)
 uv run pip install flash-attn --no-build-isolation
 ```
 
-### Environment variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `QWEN_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice` | HuggingFace model ID |
-| `QWEN_TTS_SPEAKER` | `Ryan` | Built-in speaker name |
-| `QWEN_TTS_LANGUAGE` | `English` | Language passed to the model |
-| `QWEN_TTS_INSTRUCT` | *(professor prompt)* | Style instruction for the voice |
-| `AUDIO_OUTPUT_DIR` | `.cache/audio` | Directory for individual WAV clips and merged audio |
-
-### Running the tests
+## Tests
 
 ```bash
-uv run pytest tests/test_audiomanager.py -v
-```
-
-End-to-end integration test:
-
-```bash
-uv run pytest tests/test_audiomanager.py -v -m integration
+uv run pytest tests/ -v
+uv run pytest tests/test_audiomanager.py -v -m integration  # end-to-end
 ```
 
 ## Pipeline Overview
@@ -98,10 +89,7 @@ flowchart TD
 
 ## Configuration
 
-Edit `generate_course.py` to customize:
-- **Planning Model**: Cheap model for lesson structure (default: `liquid/lfm-2.5-1.2b-thinking:free`)
-- **Script Model**: Code-capable model for Manim generation (default: `google/gemini-2.0-flash-exp:free`)
-- **Course Code**: Change the course identifier (default: `FMNF05`)
+The model used for both lesson planning and Manim script generation is set via `--model` (default: `google/gemini-3.1-pro-preview`). All other settings are configured via `.env` as shown in Setup.
 
 ## TODOs
 - Add RAG search for previous exam problems
