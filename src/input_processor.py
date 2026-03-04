@@ -11,6 +11,7 @@ import base64
 import io
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pypdfium2 as pdfium
@@ -98,14 +99,16 @@ def extract_video_frames(
 
     uris: list[str] = []
     for t in timestamps:
-        uris.append(_frame_to_data_uri(clip.get_frame(t)))
+        frame = clip.get_frame(t)
+        if frame is not None:
+            uris.append(_frame_to_data_uri(frame))
     clip.close()
     return uris
 
 
 def process_input_dir(
     input_dir: str | Path, max_video_frames: int = MAX_VIDEO_FRAMES
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Walk *input_dir* and return a list of LangChain-compatible content parts
     (``{"type": "text", ...}`` or ``{"type": "image_url", ...}``).

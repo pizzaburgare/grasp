@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -63,7 +63,7 @@ class CourseWorkflow:
     def generate_lesson_plan(
         self,
         topic: str,
-        input_parts: Optional[list[dict]] = None,
+        input_parts: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         print(f"Generating lesson plan for: {topic}")
         print(f"Using model: {self.model}")
@@ -71,7 +71,7 @@ class CourseWorkflow:
         system_content = self.lesson_prompt_template.replace("<topic>", topic)
 
         if input_parts:
-            user_content: list[dict] | str = [
+            user_content: list[str | dict[str, Any]] | str = [
                 {
                     "type": "text",
                     "text": f"Create a lesson plan for: {topic}\n\nHere are reference materials:",
@@ -261,7 +261,7 @@ class CourseWorkflow:
             }
 
         # Step 0: Process input materials
-        input_parts: list[dict] | None = None
+        input_parts: list[dict[str, Any]] | None = None
         if input_dir:
             print("Processing input files ...")
             input_parts = process_input_dir(input_dir)

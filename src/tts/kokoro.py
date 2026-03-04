@@ -46,7 +46,7 @@ class KokoroTTSEngine(TTSEngine):
         chunks = []
         for _gs, _ps, audio in pipeline(text, voice=self.voice, speed=self.speed):
             if hasattr(audio, "detach"):  # torch.Tensor → numpy
-                audio = audio.detach().cpu().numpy()
+                audio = audio.detach().cpu().numpy()  # type: ignore[union-attr]
             chunks.append(np.asarray(audio, dtype=np.float32))
         if not chunks:
             return np.zeros(0, dtype=np.float32), _SAMPLE_RATE

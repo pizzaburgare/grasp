@@ -73,6 +73,13 @@ uv run pytest tests/ -v
 uv run pytest tests/test_audiomanager.py -v -m integration  # end-to-end
 ```
 
+## Linting
+
+```bash
+uv run pyright
+uv run ruff check
+```
+
 ## Pipeline Overview
 
 ```mermaid

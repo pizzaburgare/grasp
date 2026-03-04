@@ -5,7 +5,7 @@ Uses OpenRouter to generate Manim code from lesson plans
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -41,7 +41,7 @@ class ManimScriptGenerator:
         self,
         lesson_content: str,
         topic: str,
-        input_parts: Optional[list[dict]] = None,
+        input_parts: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         text = f"""Topic: {topic}
 
@@ -57,7 +57,7 @@ Generate a complete Manim script that:
 """
 
         if input_parts:
-            user_content: list[dict] = [
+            user_content: list[str | dict[str, Any]] = [
                 {"type": "text", "text": text},
                 {"type": "text", "text": "Reference materials from input directory:"},
                 *input_parts,
@@ -123,7 +123,7 @@ Generate a complete Manim script that:
         lesson_content: str,
         topic: str,
         output_path: str | Path,
-        input_parts: Optional[list[dict]] = None,
+        input_parts: Optional[list[dict[str, Any]]] = None,
     ) -> Path:
         print(f"Generating Manim script ({self.model}) ...")
         script = self.generate_script(lesson_content, topic, input_parts)
