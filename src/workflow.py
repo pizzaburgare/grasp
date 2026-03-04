@@ -33,6 +33,7 @@ from src.paths import (
     CACHE_AUDIO_DIR,
     CACHE_DIR,
     CACHE_MANIM_DIR,
+    INPUT_DIR,
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
@@ -191,8 +192,15 @@ class CourseWorkflow:
         self,
         topic: str,
         input_parts: Optional[list[dict[str, Any]]] = None,
+        input_files: Optional[list[str]] = None,
     ) -> str:
         print(f"Generating lesson plan for: {topic}")
+        if input_files:
+            print(f"  Using {len(input_files)} input file(s):")
+            for f in input_files:
+                print(f"    - {f}")
+        else:
+            print("  No input files — using topic name only")
         print(f"Using model: {self.model}")
 
         system_content = self.lesson_prompt_template.replace("<topic>", topic)
@@ -443,6 +451,11 @@ class CourseWorkflow:
         slug = self._topic_to_slug(topic)
         out = Path(output_dir)
         tts_engine = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
+
+        # Auto-detect default input directory when none is specified
+        if input_dir is None and INPUT_DIR.is_dir():
+            input_dir = str(INPUT_DIR)
+
         context_hash = hash_context(
             topic,
             input_dir,
@@ -497,12 +510,18 @@ class CourseWorkflow:
 
         # Step 0: Process input materials
         input_parts: list[dict[str, Any]] | None = None
+        input_files: list[str] | None = None
         if input_dir:
+            input_path = Path(input_dir)
+            input_files = [
+                f.relative_to(input_path).as_posix()
+                for f in sorted(input_path.rglob("*"))
+                if f.is_file() and not f.name.startswith(".")
+            ]
             print("Processing input files ...")
             input_parts = process_input_dir(input_dir)
-            text_count = sum(1 for p in input_parts if p["type"] == "text")
             image_count = sum(1 for p in input_parts if p["type"] == "image_url")
-            print(f"   {text_count} text parts, {image_count} image parts")
+            print(f"   {len(input_files)} file(s) → {image_count} image parts")
 
         # Step 1+2: Lesson plan & Manim script (both keyed by context hash)
         script_path = get_lesson_cache_dir(slug) / "script" / f"{context_hash}.py"
@@ -529,7 +548,9 @@ class CourseWorkflow:
             )
         else:
             # Step 1: Generate lesson plan
-            lesson = self.generate_lesson_plan(topic, input_parts=input_parts)
+            lesson = self.generate_lesson_plan(
+                topic, input_parts=input_parts, input_files=input_files
+            )
             usage_steps.append(
                 ("Step 1 — Lesson planning", self._last_lesson_usage, False)
             )

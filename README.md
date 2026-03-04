@@ -90,10 +90,10 @@ uv run ruff check
 flowchart TD
     A[Topic Input] --> B[1. Generate Lesson Plan<br>via OpenRouter LLM]
     B --> C[2. Generate Manim Script<br>via OpenRouter LLM]
-    C --> D[main.py created]
+    C --> D[Mainim script created]
     D --> E[3a. Render Video<br>manim command]
     D --> F[3b. Generate Audio<br>AudioManager + TTS]
-    E --> G[4. Merge Audio & Video<br>merge_audio_video.py]
+    E --> G[4. Merge Audio & Video]
     F --> G
     G --> H[Final Video Output]
 ```

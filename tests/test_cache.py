@@ -644,10 +644,16 @@ class TestWorkflowCacheIntegration:
 
     @pytest.fixture()
     def patched_cache_dir(self, tmp_path, monkeypatch):
-        """Redirect both src.cache.CACHE_DIR and src.workflow.CACHE_DIR."""
+        """Redirect both src.cache.CACHE_DIR and src.workflow.CACHE_DIR.
+
+        Also neutralise INPUT_DIR auto-detection so pipeline tests compute
+        deterministic hashes regardless of what exists in the real input/.
+        """
         cache = tmp_path / "cache"
         monkeypatch.setattr("src.cache.CACHE_DIR", cache)
         monkeypatch.setattr("src.workflow.CACHE_DIR", cache)
+        # Point INPUT_DIR at a path that never exists so auto-detection is skipped
+        monkeypatch.setattr("src.workflow.INPUT_DIR", tmp_path / "_no_input_dir_")
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
         monkeypatch.setenv("TTS_ENGINE", "kokoro")
         return cache

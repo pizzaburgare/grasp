@@ -19,5 +19,8 @@ SRC_DIR = ROOT / "src"
 LESSON_PROMPT = SRC_DIR / "lesson_prompt.md"
 MANIM_PROMPT = SRC_DIR / "manim_prompt.md"
 
+# --- Default input ---
+INPUT_DIR = ROOT / "input"
+
 # --- Default output ---
 OUTPUT_DIR = ROOT / "output"
