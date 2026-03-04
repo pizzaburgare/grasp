@@ -12,6 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
+from src.llm_metrics import LLMUsage, extract_llm_usage
 from src.paths import MANIM_PROMPT
 
 load_dotenv()
@@ -36,6 +37,8 @@ class ManimScriptGenerator:
 
         with open(MANIM_PROMPT) as f:
             self.system_prompt = f.read()
+
+        self.last_generation_usage: LLMUsage | None = None
 
     def generate_script(
         self,
@@ -71,6 +74,7 @@ Generate a complete Manim script that:
         ]
 
         response = self.llm.invoke(messages)
+        self.last_generation_usage = extract_llm_usage(response)
         return self._clean_code_output(str(response.content))
 
     def _clean_code_output(self, code: str) -> str:

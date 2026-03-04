@@ -17,6 +17,16 @@ CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
 
 
+def _audio_logs_enabled() -> bool:
+    value = os.environ.get("AUDIO_MANAGER_VERBOSE", "1").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _audio_log(text: str) -> None:
+    if _audio_logs_enabled():
+        print(text)
+
+
 def _audio_dir() -> Path:
     d = Path(os.environ.get("AUDIO_OUTPUT_DIR", str(CACHE_AUDIO_DIR)))
     d.mkdir(parents=True, exist_ok=True)
@@ -80,27 +90,27 @@ class AudioManager:
         self.audio_durations: list[float] = []
 
     def say(self, text: str) -> None:
-        print(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
+        _audio_log(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
         self.i += 1
         self.times.append(self.scene.renderer.time)
         duration = create_wav(text, self.i, self.engine)
         self.audio_durations.append(duration)
-        print(f"AudioManager: Audio duration is {duration:.2f} seconds")
+        _audio_log(f"AudioManager: Audio duration is {duration:.2f} seconds")
 
     def done_say(self) -> None:
-        print("AudioManager: Done saying text")
+        _audio_log("AudioManager: Done saying text")
         time_since_started = self.scene.renderer.time - self.times[-1]
-        print(
+        _audio_log(
             f"AudioManager: Time since started saying text: {time_since_started:.2f} seconds"
         )
         to_sleep = self.audio_durations[-1] - time_since_started
         if to_sleep > 0:
-            print(f"AudioManager: Sleeping for {to_sleep:.2f} seconds")
+            _audio_log(f"AudioManager: Sleeping for {to_sleep:.2f} seconds")
             self.scene.wait(to_sleep)
 
     def merge_audio(self) -> None:
         if self.i == 0:
-            print("AudioManager: No audio files to merge")
+            _audio_log("AudioManager: No audio files to merge")
             return
 
         audio_dir = _audio_dir()
@@ -133,4 +143,4 @@ class AudioManager:
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_data.tobytes())
 
-        print(f"AudioManager: Merged {self.i} audio files to {merged_path}")
+        _audio_log(f"AudioManager: Merged {self.i} audio files to {merged_path}")

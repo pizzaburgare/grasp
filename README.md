@@ -41,6 +41,10 @@ KOKORO_SPEED=1.2
 
 # Output directory for audio clips and merged audio
 AUDIO_OUTPUT_DIR=.cache/audio
+
+# AudioManager log verbosity during Manim render (0 = quiet, 1 = verbose)
+# The workflow forces this to 0 while compiling so terminal output stays clean.
+AUDIO_MANAGER_VERBOSE=1
 ```
 
 ## Usage
