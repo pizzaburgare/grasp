@@ -19,12 +19,17 @@ from moviepy import AudioFileClip, VideoFileClip
 from pydantic import SecretStr
 
 from src.input_processor import process_input_dir
+from src.cache import (
+    get_audio_cache_dir,
+    get_cached_video,
+    get_lesson_cache_dir,
+    hash_context,
+    save_video_to_cache,
+)
 from src.paths import (
     CACHE_AUDIO_DIR,
     CACHE_DIR,
-    CACHE_LESSON_PLAN,
     CACHE_MANIM_DIR,
-    CACHE_SCRIPTS_DIR,
     LESSON_PROMPT,
 )
 from src.script_generator import ManimScriptGenerator
@@ -109,20 +114,40 @@ class CourseWorkflow:
         output_dir: Path,
         topic_slug: str,
         final_quality: bool = False,
+        *,
+        lesson_name: str | None = None,
+        context_hash: str | None = None,
     ) -> Path:
-        """Render the Manim script and merge TTS audio into the final video."""
+        """Render the Manim script and merge TTS audio into the final video.
+
+        When *lesson_name* and *context_hash* are supplied:
+        - ``AUDIO_CACHE_DIR`` is set to ``<lesson>/audio/`` (persistent hash store)
+        - ``AUDIO_OUTPUT_DIR`` is set to ``<lesson>/audio/work/`` (numbered working
+          files + ``merged_audio.wav``; cleaned up on success)
+        - The finished video is written into the video cache.
+        """
+        import shutil as _shutil
+
         scene_class = self._detect_scene_class(script_path)
         quality_flag = "-qh" if final_quality else "-ql"
         quality_label = "high" if final_quality else "low"
         print(f"Rendering scene: {scene_class} ({quality_label} quality)")
 
-        cache_audio = CACHE_AUDIO_DIR
+        if lesson_name:
+            audio_cache_dir = get_audio_cache_dir(lesson_name)
+            audio_work_dir = audio_cache_dir / "work"
+        else:
+            audio_cache_dir = CACHE_AUDIO_DIR
+            audio_work_dir = CACHE_AUDIO_DIR
         cache_manim = CACHE_MANIM_DIR
-        cache_audio.mkdir(parents=True, exist_ok=True)
+        audio_cache_dir.mkdir(parents=True, exist_ok=True)
+        audio_work_dir.mkdir(parents=True, exist_ok=True)
         cache_manim.mkdir(parents=True, exist_ok=True)
 
         env = os.environ.copy()
-        env["AUDIO_OUTPUT_DIR"] = str(cache_audio)
+        env["AUDIO_OUTPUT_DIR"] = str(audio_work_dir)
+        if lesson_name:
+            env["AUDIO_CACHE_DIR"] = str(audio_cache_dir)
 
         result = subprocess.run(
             [
@@ -152,15 +177,13 @@ class CourseWorkflow:
         print(f"Video rendered: {video_path}")
 
         # Merge audio
-        merged_audio = cache_audio / "merged_audio.wav"
+        merged_audio = audio_work_dir / "merged_audio.wav"
         output_dir.mkdir(parents=True, exist_ok=True)
         final_path = output_dir / f"{topic_slug}.mp4"
 
         if not merged_audio.exists():
             print("No merged_audio.wav found — copying video without audio")
-            import shutil
-
-            shutil.copy2(video_path, final_path)
+            _shutil.copy2(video_path, final_path)
         else:
             print("Merging audio into video ...")
             video_clip = VideoFileClip(str(video_path))
@@ -171,6 +194,17 @@ class CourseWorkflow:
             audio_clip.close()
 
         print(f"Final video: {final_path}")
+
+        if lesson_name and context_hash:
+            save_video_to_cache(lesson_name, context_hash, final_path)
+            print(
+                f"Video cached: {get_lesson_cache_dir(lesson_name) / 'video' / f'{context_hash}.mp4'}"
+            )
+
+        # Clean up working audio files — hash-named cache files are preserved
+        if audio_work_dir != audio_cache_dir:
+            _shutil.rmtree(audio_work_dir, ignore_errors=True)
+
         return final_path
 
     # ------------------------------------------------------------------
@@ -184,26 +218,47 @@ class CourseWorkflow:
         output_dir: str = "output",
         final_quality: bool = False,
     ) -> dict:
+        import shutil
+
         slug = self._topic_to_slug(topic)
         out = Path(output_dir)
-
-        cache_scripts = CACHE_SCRIPTS_DIR
-        cache_scripts.mkdir(parents=True, exist_ok=True)
-        script_path = cache_scripts / "lesson.py"
-        lesson_plan_path = CACHE_LESSON_PLAN
+        context_hash = hash_context(topic, input_dir)
 
         tts_engine = os.environ.get("TTS_ENGINE", "kokoro").lower()
 
         print("=" * 60)
         print("Starting AI Course Generation Pipeline")
-        print(f"Topic:      {topic}")
-        print(f"LLM model:  {self.model}")
-        print(f"TTS engine: {tts_engine}")
+        print(f"Topic:        {topic}")
+        print(f"LLM model:    {self.model}")
+        print(f"TTS engine:   {tts_engine}")
         if input_dir:
-            print(f"Input dir:  {input_dir}")
-        print(f"Output dir: {out}")
-        print(f"Cache dir:  {CACHE_DIR}")
+            print(f"Input dir:    {input_dir}")
+        print(f"Output dir:   {out}")
+        print(f"Cache dir:    {CACHE_DIR}")
+        print(f"Context hash: {context_hash}")
         print("=" * 60)
+
+        # Fast path: nothing has changed — return the cached final video immediately
+        cached_video = get_cached_video(slug, context_hash)
+        if cached_video:
+            print()
+            print("=" * 60)
+            print("Nothing has changed — all assets already cached.")
+            print(f"  script : .cache/{slug}/script/{context_hash}.py")
+            print(f"  video  : .cache/{slug}/video/{context_hash}.mp4")
+            print("=" * 60)
+            out.mkdir(parents=True, exist_ok=True)
+            final_path = out / f"{slug}.mp4"
+            shutil.copy2(cached_video, final_path)
+            print(f"Final video: {final_path}")
+            return {
+                "output_dir": str(out),
+                "lesson_plan": None,
+                "script_path": None,
+                "final_video": str(final_path),
+                "topic": topic,
+                "cache_hit": "video",
+            }
 
         # Step 0: Process input materials
         input_parts: list[dict] | None = None
@@ -214,25 +269,39 @@ class CourseWorkflow:
             image_count = sum(1 for p in input_parts if p["type"] == "image_url")
             print(f"   {text_count} text parts, {image_count} image parts")
 
-        # Step 1: Generate lesson plan
-        lesson = self.generate_lesson_plan(topic, input_parts=input_parts)
-        lesson_plan_path.write_text(lesson)
-        print(f"Lesson plan: {lesson_plan_path}")
+        # Step 1+2: Lesson plan & Manim script (both keyed by context hash)
+        script_path = get_lesson_cache_dir(slug) / "script" / f"{context_hash}.py"
+        lesson_plan_path = script_path.with_suffix(".md")
 
-        print()
-
-        # Step 2: Generate Manim script
-        self.script_generator.generate_and_save(
-            lesson_content=lesson,
-            topic=topic,
-            output_path=script_path,
-            input_parts=input_parts,
-        )
+        if script_path.exists():
+            print(f"Cache hit (script): {script_path}")
+            lesson = lesson_plan_path.read_text() if lesson_plan_path.exists() else ""
+        else:
+            # Step 1: Generate lesson plan
+            lesson = self.generate_lesson_plan(topic, input_parts=input_parts)
+            lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
+            lesson_plan_path.write_text(lesson)
+            print(f"Lesson plan: {lesson_plan_path}")
+            print()
+            # Step 2: Generate Manim script
+            self.script_generator.generate_and_save(
+                lesson_content=lesson,
+                topic=topic,
+                output_path=script_path,
+                input_parts=input_parts,
+            )
 
         print()
 
         # Step 3: Render + merge
-        final_video = self.render_and_merge(script_path, out, slug, final_quality)
+        final_video = self.render_and_merge(
+            script_path,
+            out,
+            slug,
+            final_quality,
+            lesson_name=slug,
+            context_hash=context_hash,
+        )
 
         print()
         print("=" * 60)

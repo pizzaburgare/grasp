@@ -1,4 +1,6 @@
+import hashlib
 import os
+import shutil
 import wave
 from pathlib import Path
 
@@ -21,16 +23,50 @@ def _audio_dir() -> Path:
     return d
 
 
+def _audio_cache_dir() -> Path | None:
+    """Return the persistent audio cache directory, or None if not configured.
+
+    Set the ``AUDIO_CACHE_DIR`` environment variable to enable per-text-hash
+    caching so that identical narration snippets are only synthesised once.
+    """
+    if d := os.environ.get("AUDIO_CACHE_DIR"):
+        p = Path(d)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    return None
+
+
 def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
+    """Synthesise *text_to_speak* and write it as ``audio_{i}.wav``.
+
+    When ``AUDIO_CACHE_DIR`` is set the function first checks whether a WAV
+    for this exact text already exists (keyed by SHA-256 hash).  On a cache
+    hit the TTS engine is bypassed entirely.  On a cache miss the synthesised
+    file is stored in the cache for future reuse.
+    """
+    out_path = _audio_dir() / f"audio_{i}.wav"
+    cache_dir = _audio_cache_dir()
+    cached_wav: Path | None = None
+
+    if cache_dir is not None:
+        text_hash = hashlib.sha256(text_to_speak.encode()).hexdigest()[:16]
+        cached_wav = cache_dir / f"{text_hash}.wav"
+        if cached_wav.exists():
+            shutil.copy2(cached_wav, out_path)
+            with wave.open(str(out_path), "rb") as wf:
+                return (wf.getnframes() / wf.getframerate()) + 1
+
     audio, sr = engine.synthesize(text_to_speak)
     audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
 
-    out_path = _audio_dir() / f"audio_{i}.wav"
     with wave.open(str(out_path), "wb") as wav_file:
         wav_file.setnchannels(CHANNELS)
         wav_file.setsampwidth(SAMPLE_WIDTH)
         wav_file.setframerate(sr)
         wav_file.writeframes(audio_int16.tobytes())
+
+    if cached_wav is not None:
+        shutil.copy2(out_path, cached_wav)
 
     return (len(audio_int16) / sr) + 1  # +1s buffer
 
