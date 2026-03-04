@@ -37,7 +37,7 @@ from src.paths import (
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
-from src.settings import DEFAULT_LLM_MODEL, DEFAULT_TTS_ENGINE
+from src.settings import DEFAULT_LLM_MODEL, DEFAULT_TTS_ENGINE, MAX_SCRIPT_ITERATIONS
 from src.script_generator import ManimScriptGenerator
 
 load_dotenv()
@@ -580,15 +580,81 @@ class CourseWorkflow:
 
         print()
 
-        # Step 3: Render + merge
-        final_video = self.render_and_merge(
-            script_path,
-            out,
-            slug,
-            final_quality,
-            lesson_name=slug,
-            context_hash=context_hash,
-        )
+        # Step 3: Render + merge (with iterative review / error-fix loop)
+        max_iters = MAX_SCRIPT_ITERATIONS
+        final_video: Path | None = None
+
+        for iteration in range(max_iters):
+            iter_label = f"[iter {iteration + 1}/{max_iters}]"
+            print(f"Step 3 {iter_label}: Render + merge")
+
+            try:
+                final_video = self.render_and_merge(
+                    script_path,
+                    out,
+                    slug,
+                    final_quality,
+                    lesson_name=slug,
+                    context_hash=context_hash,
+                )
+            except (RuntimeError, FileNotFoundError) as exc:
+                # Compilation / render failure
+                if iteration >= max_iters - 1:
+                    raise  # exhausted retries
+
+                error_text = str(exc)
+                print(f"  Render failed {iter_label}: {error_text[:200]}")
+                current_script = script_path.read_text()
+                fixed = self.script_generator.fix_compilation_error(
+                    script=current_script,
+                    error_output=error_text,
+                    topic=topic,
+                    lesson_content=lesson,
+                )
+                script_path.write_text(fixed)
+                print(f"  Overwritten script: {script_path}")
+
+                fix_usage = getattr(self.script_generator, "last_fix_usage", None)
+                if not isinstance(fix_usage, LLMUsage):
+                    fix_usage = None
+                usage_steps.append(
+                    (f"Step 3 {iter_label} — error fix", fix_usage, False)
+                )
+                self._print_openrouter_step(
+                    f"Step 3 {iter_label} — error fix", usage=fix_usage
+                )
+                continue  # retry render
+
+            # Render succeeded — ask the LLM to review the video
+            if iteration >= max_iters - 1:
+                break  # last iteration, skip review
+
+            current_script = script_path.read_text()
+            new_script, changed = self.script_generator.review_video(
+                script=current_script,
+                video_path=final_video,
+                topic=topic,
+                lesson_content=lesson,
+            )
+
+            review_usage = getattr(self.script_generator, "last_review_usage", None)
+            if not isinstance(review_usage, LLMUsage):
+                review_usage = None
+            usage_steps.append(
+                (f"Step 3 {iter_label} — video review", review_usage, False)
+            )
+            self._print_openrouter_step(
+                f"Step 3 {iter_label} — video review", usage=review_usage
+            )
+
+            if not changed:
+                break  # video approved, early exit
+
+            script_path.write_text(new_script)
+            print(f"  Overwritten script: {script_path}")
+
+        if final_video is None:
+            raise RuntimeError("All render iterations failed.")
 
         print()
         print("=" * 60)

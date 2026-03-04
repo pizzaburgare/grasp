@@ -3,13 +3,18 @@ Script Generator for Manim Educational Videos
 Uses OpenRouter to generate Manim code from lesson plans
 """
 
+import base64
+import io
 import os
 from pathlib import Path
 from typing import Any, Optional
 
+import numpy as np
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from moviepy import VideoFileClip
+from PIL import Image
 from pydantic import SecretStr
 
 from src.llm_metrics import LLMUsage, extract_llm_usage
@@ -17,6 +22,10 @@ from src.paths import MANIM_PROMPT
 from src.settings import DEFAULT_LLM_MODEL
 
 load_dotenv()
+
+# Maximum number of video frames sent for review
+_REVIEW_MAX_FRAMES = 50
+_REVIEW_FRAME_QUALITY = 70
 
 
 class ManimScriptGenerator:
@@ -137,3 +146,136 @@ Generate a complete Manim script that:
         out.write_text(script)
         print(f"Script saved: {out}")
         return out
+
+    # ------------------------------------------------------------------
+    # Iteration helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_video_frames(video_path: Path) -> list[dict[str, Any]]:
+        """Sample frames from a video and return them as LLM image_url parts."""
+        clip = VideoFileClip(str(video_path))
+        try:
+            duration = float(clip.duration or 0.0)
+            if duration <= 0:
+                return []
+            # Pick a frame interval that yields at most _REVIEW_MAX_FRAMES
+            interval = max(1.0, duration / _REVIEW_MAX_FRAMES)
+            parts: list[dict[str, Any]] = []
+            t = 0.0
+            while t < duration:
+                frame: np.ndarray = clip.get_frame(t)
+                img = Image.fromarray(frame)
+                buf = io.BytesIO()
+                img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
+                data = base64.b64encode(buf.getvalue()).decode()
+                parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{data}",
+                        },
+                    }
+                )
+                t += interval
+            return parts
+        finally:
+            clip.close()
+
+    def review_video(
+        self,
+        script: str,
+        video_path: Path,
+        topic: str,
+        lesson_content: str,
+    ) -> tuple[str, bool]:
+        """Review the rendered video for visual issues.
+
+        Returns ``(script, changed)``.  When *changed* is ``False`` the video
+        passed review; otherwise *script* contains the corrected code.
+        """
+        print("Reviewing rendered video for visual issues ...")
+        frames = self._extract_video_frames(video_path)
+        if not frames:
+            print("  Could not extract frames — skipping review.")
+            return script, False
+
+        user_content: list[str | dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": (
+                    f"Topic: {topic}\n\n"
+                    "Below are sampled frames from a Manim-rendered educational video, "
+                    "followed by the Python source code that produced it.\n\n"
+                    "Check the video frames for ANY of these problems:\n"
+                    "  • Text or equations clipped / cut off at the edges\n"
+                    "  • Overlapping or unreadable content\n"
+                    "  • Broken or glitchy animations (artifacts, misplaced objects)\n"
+                    "  • Content overflowing outside the visible frame\n"
+                    "  • Missing or blank sections that should have content\n"
+                    "  • Incorrect visual representations of math concepts\n\n"
+                    "If the video looks acceptable, respond with EXACTLY the string:\n"
+                    '"APPROVED"\n\n'
+                    "If there are problems, respond with the COMPLETE corrected Python "
+                    "script that fixes them. Output ONLY the code, no markdown fences, "
+                    "no explanations.\n\n"
+                    f"--- SOURCE CODE ---\n```python\n{script}\n```"
+                ),
+            },
+            *frames,
+        ]
+
+        messages = [
+            SystemMessage(content=self.system_prompt),
+            HumanMessage(content=user_content),
+        ]
+
+        response = self.llm.invoke(messages)
+        self.last_review_usage = extract_llm_usage(response)
+        answer = str(response.content).strip()
+
+        if answer.upper().startswith("APPROVED"):
+            print("  Video review: APPROVED - no issues found.")
+            return script, False
+
+        print("  Video review: issues found - regenerating script.")
+        new_script = self._clean_code_output(answer)
+        return new_script, True
+
+    def fix_compilation_error(
+        self,
+        script: str,
+        error_output: str,
+        topic: str,
+        lesson_content: str,
+    ) -> str:
+        """Ask the LLM to fix a script that failed to render.
+
+        Returns the corrected script.
+        """
+        print("Sending compilation error to LLM for a fix ...")
+
+        user_content: list[str | dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": (
+                    f"Topic: {topic}\n\n"
+                    "The following Manim script failed to render. "
+                    "Below is the script followed by the error output.\n\n"
+                    "Fix the script so it compiles and renders correctly. "
+                    "Output ONLY the complete corrected Python code, no markdown "
+                    "fences, no explanations.\n\n"
+                    f"--- SOURCE CODE ---\n```python\n{script}\n```\n\n"
+                    f"--- ERROR OUTPUT (last 60 lines) ---\n```\n{error_output}\n```"
+                ),
+            },
+        ]
+
+        messages = [
+            SystemMessage(content=self.system_prompt),
+            HumanMessage(content=user_content),
+        ]
+
+        response = self.llm.invoke(messages)
+        self.last_fix_usage = extract_llm_usage(response)
+        return self._clean_code_output(str(response.content))
