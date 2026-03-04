@@ -21,6 +21,7 @@ dependencies = [
     "torch>=2.3.0",
     "pypdfium2>=4.30.0",
     "python-dotenv>=1.2.2",
+    "markitdown[pdf]>=0.1.5",
 ]
 
 [dependency-groups]

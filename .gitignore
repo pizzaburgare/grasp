@@ -4,6 +4,9 @@ course
 /output
 input
 
+rag_source
+rag
+
 *.mp4
 *.wav
 *.onnx
