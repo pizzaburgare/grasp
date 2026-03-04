@@ -4,9 +4,9 @@ Orchestrates: Input Processing → Lesson Planning → Script Generation → Ren
 """
 
 import ast
+import hashlib
 import logging
 import os
-import re
 import subprocess
 import sys
 import time
@@ -25,6 +25,7 @@ from src.cache import (
     get_cached_video,
     get_lesson_cache_dir,
     hash_context,
+    lesson_name_to_key,
     save_video_to_cache,
 )
 from src.llm_metrics import LLMUsage, extract_llm_usage
@@ -33,7 +34,9 @@ from src.paths import (
     CACHE_DIR,
     CACHE_MANIM_DIR,
     LESSON_PROMPT,
+    MANIM_PROMPT,
 )
+from src.settings import DEFAULT_LLM_MODEL, DEFAULT_TTS_ENGINE
 from src.script_generator import ManimScriptGenerator
 
 load_dotenv()
@@ -41,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 class CourseWorkflow:
-    def __init__(self, model: str = "google/gemini-3.1-pro-preview"):
+    def __init__(self, model: str = DEFAULT_LLM_MODEL):
         self.model = model
 
         self.planner_llm = ChatOpenAI(
@@ -57,7 +60,42 @@ class CourseWorkflow:
         self.script_generator = ManimScriptGenerator(model=model)
 
         self.lesson_prompt_template = LESSON_PROMPT.read_text()
+        self.manim_prompt_template = MANIM_PROMPT.read_text()
         self._last_lesson_usage: LLMUsage | None = None
+
+    @staticmethod
+    def _prompt_digest(text: str) -> str:
+        return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+    @staticmethod
+    def _tts_config_fingerprint(tts_engine: str) -> dict[str, str]:
+        """Return env vars that materially affect the selected TTS output."""
+        keys_by_engine: dict[str, tuple[str, ...]] = {
+            "qwen": (
+                "QWEN_TTS_MODEL",
+                "QWEN_TTS_SPEAKER",
+                "QWEN_TTS_LANGUAGE",
+                "QWEN_TTS_REF_AUDIO",
+                "QWEN_TTS_REF_TEXT",
+            ),
+            "piper": ("PIPER_MODEL",),
+            "kokoro": ("KOKORO_VOICE", "KOKORO_LANG_CODE", "KOKORO_SPEED"),
+        }
+        keys = keys_by_engine.get(tts_engine, ())
+        return {
+            "engine": tts_engine,
+            **{key: os.environ.get(key, "") for key in keys},
+        }
+
+    def _build_cache_context(self, tts_engine: str, final_quality: bool) -> dict[str, Any]:
+        """Build deterministic metadata that should invalidate cached script/video."""
+        return {
+            "model": self.model,
+            "quality": "high" if final_quality else "low",
+            "lesson_prompt": self._prompt_digest(self.lesson_prompt_template),
+            "manim_prompt": self._prompt_digest(self.manim_prompt_template),
+            "tts": self._tts_config_fingerprint(tts_engine),
+        }
 
     @staticmethod
     def _format_cost(cost_usd: float | None) -> str:
@@ -227,12 +265,34 @@ class CourseWorkflow:
     @staticmethod
     def _detect_scene_class(script_path: Path) -> str:
         tree = ast.parse(script_path.read_text())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                for base in node.bases:
-                    name = getattr(base, "id", getattr(base, "attr", ""))
-                    if name == "Scene":
-                        return node.name
+
+        def _base_name(base: ast.expr) -> str:
+            if isinstance(base, ast.Name):
+                return base.id
+            if isinstance(base, ast.Attribute):
+                return base.attr
+            return ""
+
+        classes = [node for node in tree.body if isinstance(node, ast.ClassDef)]
+        scene_like: list[str] = []
+        changed = True
+
+        while changed:
+            changed = False
+            for cls in classes:
+                if cls.name in scene_like:
+                    continue
+                base_names = [_base_name(base) for base in cls.bases]
+                if any(
+                    name and (name == "Scene" or name.endswith("Scene") or name in scene_like)
+                    for name in base_names
+                ):
+                    scene_like.append(cls.name)
+                    changed = True
+
+        if scene_like:
+            return scene_like[-1]
+
         raise ValueError(f"No Scene subclass found in {script_path}")
 
     def render_and_merge(
@@ -321,26 +381,32 @@ class CourseWorkflow:
             _shutil.copy2(video_path, final_path)
         else:
             print("Merging audio into video ...")
-            video_clip = VideoFileClip(str(video_path))
-            audio_clip = AudioFileClip(str(merged_audio))
-            final = video_clip.with_audio(audio_clip)
+            final_clip = None
 
             # Suppress MoviePy verbose output during merge
             moviepy_logger = logging.getLogger("moviepy")
             old_level = moviepy_logger.level
             moviepy_logger.setLevel(logging.ERROR)
             try:
-                final.write_videofile(
-                    str(final_path),
-                    codec="libx264",
-                    audio_codec="aac",
-                    logger=None,
-                )
+                video_clip = VideoFileClip(str(video_path))
+                try:
+                    audio_clip = AudioFileClip(str(merged_audio))
+                    try:
+                        final_clip = video_clip.with_audio(audio_clip)
+                        final_clip.write_videofile(
+                            str(final_path),
+                            codec="libx264",
+                            audio_codec="aac",
+                            logger=None,
+                        )
+                    finally:
+                        if final_clip is not None and hasattr(final_clip, "close"):
+                            final_clip.close()
+                        audio_clip.close()
+                finally:
+                    video_clip.close()
             finally:
                 moviepy_logger.setLevel(old_level)
-
-            video_clip.close()
-            audio_clip.close()
 
         print(f"Final video: {final_path}")
 
@@ -371,13 +437,16 @@ class CourseWorkflow:
 
         slug = self._topic_to_slug(topic)
         out = Path(output_dir)
-        context_hash = hash_context(topic, input_dir)
+        tts_engine = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
+        context_hash = hash_context(
+            topic,
+            input_dir,
+            extra_context=self._build_cache_context(tts_engine, final_quality),
+        )
         self._last_lesson_usage = None
         if hasattr(self.script_generator, "last_generation_usage"):
             self.script_generator.last_generation_usage = None
         usage_steps: list[tuple[str, LLMUsage | None, bool]] = []
-
-        tts_engine = os.environ.get("TTS_ENGINE", "kokoro").lower()
 
         print("=" * 60)
         print("Starting AI Course Generation Pipeline")
@@ -514,7 +583,4 @@ class CourseWorkflow:
 
     @staticmethod
     def _topic_to_slug(topic: str) -> str:
-        slug = topic.lower()
-        slug = re.sub(r"[^\w\s-]", "", slug)
-        slug = re.sub(r"[\s_]+", "-", slug).strip("-")
-        return slug
+        return lesson_name_to_key(topic)

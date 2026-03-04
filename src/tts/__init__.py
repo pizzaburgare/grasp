@@ -1,5 +1,7 @@
 import os
 
+from src.settings import DEFAULT_TTS_ENGINE
+
 from .base import TTSEngine
 from .kokoro import KokoroTTSEngine
 from .piper import PiperTTSEngine
@@ -12,7 +14,7 @@ _REGISTRY: dict[str, type[TTSEngine]] = {
     for cls in (PiperTTSEngine, QwenTTSEngine, KokoroTTSEngine)
 }
 
-_DEFAULT_ENGINE = "kokoro"
+_DEFAULT_ENGINE = DEFAULT_TTS_ENGINE
 
 __all__ = [
     "TTSEngine",

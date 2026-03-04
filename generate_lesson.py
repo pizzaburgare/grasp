@@ -14,6 +14,7 @@ from pathlib import Path
 # Make project root importable when running as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from src.settings import DEFAULT_LLM_MODEL
 from src.workflow import CourseWorkflow
 
 
@@ -45,9 +46,9 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="google/gemini-3.1-pro-preview",
+        default=DEFAULT_LLM_MODEL,
         metavar="MODEL",
-        help="OpenRouter model for both planning and script generation (default: google/gemini-3.1-pro-preview)",
+        help=f"OpenRouter model for both planning and script generation (default: {DEFAULT_LLM_MODEL})",
     )
     parser.add_argument(
         "--final",

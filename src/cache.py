@@ -11,16 +11,17 @@ Cache structure::
             video/
                 {context_hash}.mp4
 
-*Context hash* is derived from the lesson topic + all bytes of every file in the
-input directory. *Text hash* is derived from the exact narration text that TTS
-will speak.
+*Context hash* is derived from the lesson topic + input file paths/bytes +
+optional generation metadata (model, quality, TTS config, ...). *Text hash* is
+derived from the exact narration text that TTS will speak.
 """
 
 import hashlib
+import json
 import re
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 from src.paths import CACHE_DIR
 
@@ -48,11 +49,21 @@ def get_lesson_cache_dir(lesson_name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def hash_context(topic: str, input_dir: Optional[str] = None) -> str:
+def _json_default(value: Any) -> str:
+    return str(value)
+
+
+def hash_context(
+    topic: str,
+    input_dir: Optional[str] = None,
+    *,
+    extra_context: Mapping[str, Any] | None = None,
+) -> str:
     """Return a 16-char SHA-256 hex digest of *topic* + all file bytes in *input_dir*.
 
-    The hash changes whenever the topic text or any input file changes, making
-    it a stable cache key for the generated script and final video.
+    The hash changes whenever the topic text, any input file, or optional
+    ``extra_context`` metadata changes, making it a stable cache key for the
+    generated script and final video.
     """
     h = hashlib.sha256()
     h.update(topic.encode())
@@ -60,14 +71,29 @@ def hash_context(topic: str, input_dir: Optional[str] = None) -> str:
         p = Path(input_dir)
         for f in sorted(p.rglob("*")):
             if f.is_file():
-                h.update(f.name.encode())
+                h.update(f.relative_to(p).as_posix().encode())
                 h.update(f.read_bytes())
+
+    if extra_context:
+        context_payload = json.dumps(
+            dict(extra_context),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            default=_json_default,
+        )
+        h.update(context_payload.encode())
+
     return h.hexdigest()[:16]
 
 
-def hash_text(text: str) -> str:
-    """Return a 16-char SHA-256 hex digest of *text* (used as audio cache key)."""
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
+def hash_text(text: str, *, salt: str | None = None) -> str:
+    """Return a 16-char SHA-256 hex digest of *text* (optionally salted)."""
+    h = hashlib.sha256()
+    if salt:
+        h.update(salt.encode())
+    h.update(text.encode())
+    return h.hexdigest()[:16]
 
 
 # ---------------------------------------------------------------------------
@@ -101,15 +127,21 @@ def get_audio_cache_dir(lesson_name: str) -> Path:
     return get_lesson_cache_dir(lesson_name) / "audio"
 
 
-def get_cached_audio(lesson_name: str, text: str) -> Optional[Path]:
+def get_cached_audio(lesson_name: str, text: str, *, salt: str | None = None) -> Optional[Path]:
     """Return the cached WAV path for *text* if it exists, else ``None``."""
-    p = get_audio_cache_dir(lesson_name) / f"{hash_text(text)}.wav"
+    p = get_audio_cache_dir(lesson_name) / f"{hash_text(text, salt=salt)}.wav"
     return p if p.exists() else None
 
 
-def save_audio_to_cache(lesson_name: str, text: str, wav_path: Path) -> Path:
+def save_audio_to_cache(
+    lesson_name: str,
+    text: str,
+    wav_path: Path,
+    *,
+    salt: str | None = None,
+) -> Path:
     """Copy *wav_path* into the audio cache keyed by the hash of *text*."""
-    dest = get_audio_cache_dir(lesson_name) / f"{hash_text(text)}.wav"
+    dest = get_audio_cache_dir(lesson_name) / f"{hash_text(text, salt=salt)}.wav"
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(wav_path, dest)
     return dest

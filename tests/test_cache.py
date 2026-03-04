@@ -147,6 +147,28 @@ class TestHashContext:
         h2 = hash_context("topic", str(tmp_path))
         assert h1 == h2
 
+    def test_relative_path_change_changes_hash(self, tmp_path):
+        from src.cache import hash_context
+
+        f = tmp_path / "notes.txt"
+        f.write_text("same bytes")
+        h1 = hash_context("topic", str(tmp_path))
+
+        moved = tmp_path / "nested" / "notes.txt"
+        moved.parent.mkdir(parents=True)
+        moved.write_text("same bytes")
+        f.unlink()
+        h2 = hash_context("topic", str(tmp_path))
+
+        assert h1 != h2
+
+    def test_extra_context_changes_hash(self):
+        from src.cache import hash_context
+
+        h1 = hash_context("topic", extra_context={"model": "a"})
+        h2 = hash_context("topic", extra_context={"model": "b"})
+        assert h1 != h2
+
 
 # ===========================================================================
 # hash_text
@@ -546,6 +568,33 @@ class TestCreateWavAudioCache:
         cache_bytes = (cache_dir / f"{text_hash}.wav").read_bytes()
         assert out_bytes == cache_bytes
 
+    def test_same_text_different_engine_config_uses_separate_cache_entries(
+        self, tmp_path, monkeypatch
+    ):
+        """Changing TTS config for same text should not reuse stale cached audio."""
+        audio_out = tmp_path / "audio_out"
+        audio_out.mkdir()
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir()
+        monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(audio_out))
+        monkeypatch.setenv("AUDIO_CACHE_DIR", str(cache_dir))
+
+        text = "Voice-sensitive cache key"
+
+        engine_a = _make_engine()
+        engine_a.voice = "am_adam"
+        engine_b = _make_engine()
+        engine_b.voice = "am_michael"
+
+        from src.audiomanager import create_wav
+
+        create_wav(text, 1, engine_a)
+        create_wav(text, 2, engine_b)
+
+        engine_a.synthesize.assert_called_once_with(text)
+        engine_b.synthesize.assert_called_once_with(text)
+        assert len(list(cache_dir.glob("*.wav"))) == 2
+
     def test_no_cache_dir_env_no_caching(self, tmp_path, monkeypatch):
         """Without AUDIO_CACHE_DIR the engine is always called and nothing is cached."""
         audio_out = tmp_path / "audio_out"
@@ -600,6 +649,7 @@ class TestWorkflowCacheIntegration:
         monkeypatch.setattr("src.cache.CACHE_DIR", cache)
         monkeypatch.setattr("src.workflow.CACHE_DIR", cache)
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+        monkeypatch.setenv("TTS_ENGINE", "kokoro")
         return cache
 
     def test_video_cache_hit_skips_llm_and_render(
@@ -611,12 +661,6 @@ class TestWorkflowCacheIntegration:
 
         topic = "LU Decomposition"
         slug = "lu-decomposition"
-        ctx_hash = hash_context(topic)
-
-        # Pre-populate video cache
-        video_cache = patched_cache_dir / slug / "video" / f"{ctx_hash}.mp4"
-        video_cache.parent.mkdir(parents=True)
-        video_cache.write_bytes(b"cached video bytes")
 
         out_dir = tmp_path / "output"
 
@@ -625,6 +669,16 @@ class TestWorkflowCacheIntegration:
             patch.object(CourseWorkflow, "render_and_merge") as mock_render,
         ):
             wf = CourseWorkflow(model="test-model")
+            video_hash = hash_context(
+                topic,
+                extra_context=wf._build_cache_context("kokoro", False),
+            )
+
+            # Pre-populate video cache
+            video_cache = patched_cache_dir / slug / "video" / f"{video_hash}.mp4"
+            video_cache.parent.mkdir(parents=True)
+            video_cache.write_bytes(b"cached video bytes")
+
             result = wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         mock_plan.assert_not_called()
@@ -639,21 +693,11 @@ class TestWorkflowCacheIntegration:
         self, tmp_path, patched_cache_dir, monkeypatch
     ):
         """If a cached script exists neither the script LLM nor the lesson-plan LLM is called."""
-        from src.cache import hash_context
         from src.workflow import CourseWorkflow
+        from src.cache import hash_context
 
         topic = "Fourier Transform"
         slug = "fourier-transform"
-        ctx_hash = hash_context(topic)
-
-        # Pre-populate script cache with a valid minimal Manim script + lesson plan
-        script_dir = patched_cache_dir / slug / "script"
-        script_dir.mkdir(parents=True)
-        script_path = script_dir / f"{ctx_hash}.py"
-        script_path.write_text(
-            "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
-        )
-        (script_dir / f"{ctx_hash}.md").write_text("# cached plan")
 
         out_dir = tmp_path / "output"
 
@@ -666,6 +710,20 @@ class TestWorkflowCacheIntegration:
             ) as mock_render,
         ):
             wf = CourseWorkflow(model="test-model")
+            ctx_hash = hash_context(
+                topic,
+                extra_context=wf._build_cache_context("kokoro", False),
+            )
+
+            # Pre-populate script cache with a valid minimal Manim script + lesson plan
+            script_dir = patched_cache_dir / slug / "script"
+            script_dir.mkdir(parents=True)
+            script_path = script_dir / f"{ctx_hash}.py"
+            script_path.write_text(
+                "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
+            )
+            (script_dir / f"{ctx_hash}.md").write_text("# cached plan")
+
             wf.script_generator = MagicMock()
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
@@ -682,7 +740,6 @@ class TestWorkflowCacheIntegration:
 
         topic = "QR Decomposition"
         slug = "qr-decomposition"
-        ctx_hash = hash_context(topic)
         out_dir = tmp_path / "output"
         fake_video = out_dir / f"{slug}.mp4"
 
@@ -694,6 +751,10 @@ class TestWorkflowCacheIntegration:
         ):
             wf = CourseWorkflow(model="test-model")
             wf.script_generator = MagicMock()
+            ctx_hash = hash_context(
+                topic,
+                extra_context=wf._build_cache_context("kokoro", False),
+            )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         _, kwargs = mock_render.call_args
@@ -709,7 +770,6 @@ class TestWorkflowCacheIntegration:
 
         topic = "Eigenvalues"
         slug = "eigenvalues"
-        ctx_hash = hash_context(topic)
         out_dir = tmp_path / "output"
 
         with (
@@ -724,6 +784,10 @@ class TestWorkflowCacheIntegration:
         ):
             wf = CourseWorkflow(model="test-model")
             wf.script_generator = MagicMock()
+            ctx_hash = hash_context(
+                topic,
+                extra_context=wf._build_cache_context("kokoro", False),
+            )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         plan_path = patched_cache_dir / slug / "script" / f"{ctx_hash}.md"
@@ -812,15 +876,13 @@ class TestRenderAndMergeVideoSelection:
                 "_run_command_with_spinner",
                 return_value=MagicMock(returncode=0),
             ),
-            patch("src.workflow.VideoFileClip") as mock_video,
+            patch("src.workflow.VideoFileClip"),
             patch("src.workflow.AudioFileClip"),
         ):
             # No merged_audio.wav → takes the copy-without-audio path, so we only
             # care about which video_path was found; capture it via VideoFileClip arg.
             # Actually that path is only used when audio exists, so we verify via the
             # copy path instead by checking which file gets copied.
-            import shutil
-
             copied = {}
 
             def fake_copy(src, dst):

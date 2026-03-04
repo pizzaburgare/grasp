@@ -323,6 +323,16 @@ class TestAudioManager:
         mgr.done_say()
         scene.wait.assert_not_called()
 
+    def test_done_say_before_say_is_noop(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
+        engine = _make_mock_engine()
+        from src.audiomanager import AudioManager
+
+        scene = self._make_scene()
+        mgr = AudioManager(scene, engine=engine)
+        mgr.done_say()
+        scene.wait.assert_not_called()
+
     def test_merge_audio_creates_merged_file(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
         scene = self._make_scene(time=0.0)

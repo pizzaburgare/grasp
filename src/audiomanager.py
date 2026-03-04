@@ -1,4 +1,3 @@
-import hashlib
 import os
 import shutil
 import wave
@@ -8,8 +7,10 @@ import numpy as np
 from dotenv import load_dotenv
 from manim import Scene
 
+from src.cache import hash_text
 from .tts import TTSEngine, get_default_engine
 from src.paths import CACHE_AUDIO_DIR
+from src.settings import AUDIO_DURATION_BUFFER_SECONDS
 
 load_dotenv()
 
@@ -46,6 +47,41 @@ def _audio_cache_dir() -> Path | None:
     return None
 
 
+def _engine_cache_salt(engine: TTSEngine) -> str | None:
+    """Return a stable salt that captures TTS settings affecting waveform output."""
+    fields = (
+        "ENGINE_NAME",
+        "model_id",
+        "speaker",
+        "language",
+        "ref_audio",
+        "ref_text",
+        "model_path",
+        "voice",
+        "lang_code",
+        "speed",
+    )
+    pairs: list[str] = []
+    engine_dict = getattr(engine, "__dict__", {})
+    class_engine_name = getattr(type(engine), "ENGINE_NAME", None)
+
+    for field in fields:
+        if field == "ENGINE_NAME":
+            value = class_engine_name
+        elif field in engine_dict:
+            value = engine_dict[field]
+        else:
+            continue
+
+        if value is None:
+            continue
+        pairs.append(f"{field}={value}")
+
+    if not pairs:
+        return None
+    return "|".join(pairs)
+
+
 def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
     """Synthesise *text_to_speak* and write it as ``audio_{i}.wav``.
 
@@ -56,15 +92,16 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
     """
     out_path = _audio_dir() / f"audio_{i}.wav"
     cache_dir = _audio_cache_dir()
+    cache_salt = _engine_cache_salt(engine)
+    cache_key = hash_text(text_to_speak, salt=cache_salt)
     cached_wav: Path | None = None
 
     if cache_dir is not None:
-        text_hash = hashlib.sha256(text_to_speak.encode()).hexdigest()[:16]
-        cached_wav = cache_dir / f"{text_hash}.wav"
+        cached_wav = cache_dir / f"{cache_key}.wav"
         if cached_wav.exists():
             shutil.copy2(cached_wav, out_path)
             with wave.open(str(out_path), "rb") as wf:
-                return (wf.getnframes() / wf.getframerate()) + 1
+                return (wf.getnframes() / wf.getframerate()) + AUDIO_DURATION_BUFFER_SECONDS
 
     audio, sr = engine.synthesize(text_to_speak)
     audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
@@ -78,7 +115,7 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
     if cached_wav is not None:
         shutil.copy2(out_path, cached_wav)
 
-    return (len(audio_int16) / sr) + 1  # +1s buffer
+    return (len(audio_int16) / sr) + AUDIO_DURATION_BUFFER_SECONDS
 
 
 class AudioManager:
@@ -98,6 +135,10 @@ class AudioManager:
         _audio_log(f"AudioManager: Audio duration is {duration:.2f} seconds")
 
     def done_say(self) -> None:
+        if not self.times or not self.audio_durations:
+            _audio_log("AudioManager: done_say() called before say(); skipping")
+            return
+
         _audio_log("AudioManager: Done saying text")
         time_since_started = self.scene.renderer.time - self.times[-1]
         _audio_log(
@@ -111,6 +152,10 @@ class AudioManager:
     def merge_audio(self) -> None:
         if self.i == 0:
             _audio_log("AudioManager: No audio files to merge")
+            return
+
+        if not self.times or not self.audio_durations:
+            _audio_log("AudioManager: Missing timing metadata; merge skipped")
             return
 
         audio_dir = _audio_dir()
@@ -133,8 +178,10 @@ class AudioManager:
                 audio_chunk = np.frombuffer(frames, dtype=np.int16)
 
                 start_frame = int(self.times[audio_idx - 1] * sample_rate)
-                end_frame = start_frame + len(audio_chunk)
-                audio_data[start_frame:end_frame] = audio_chunk
+                if start_frame >= len(audio_data):
+                    continue
+                end_frame = min(start_frame + len(audio_chunk), len(audio_data))
+                audio_data[start_frame:end_frame] = audio_chunk[: end_frame - start_frame]
 
         merged_path = audio_dir / "merged_audio.wav"
         with wave.open(str(merged_path), "wb") as wav_file:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Quick test script to generate a sample audio clip.
-The audio will be saved to .cache/audio/test_audio.wav
+The audio will be saved to .cache/audio/audio_999.wav
 
 Select the engine with the TTS_ENGINE env var (qwen | piper | kokoro).
 Defaults to kokoro.
@@ -11,10 +11,11 @@ import os
 import sys
 import time
 
+from src.settings import DEFAULT_TTS_ENGINE  # noqa: E402
 from src.tts import available_engines  # noqa: E402
 
 ENGINES = available_engines()
-engine_name = os.environ.get("TTS_ENGINE", "kokoro").lower()
+engine_name = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
 
 if engine_name not in ENGINES:
     print(f"Unknown engine '{engine_name}'. Choose one of: {', '.join(ENGINES)}")

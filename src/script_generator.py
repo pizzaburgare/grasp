@@ -14,6 +14,7 @@ from pydantic import SecretStr
 
 from src.llm_metrics import LLMUsage, extract_llm_usage
 from src.paths import MANIM_PROMPT
+from src.settings import DEFAULT_LLM_MODEL
 
 load_dotenv()
 
@@ -21,7 +22,7 @@ load_dotenv()
 class ManimScriptGenerator:
     """Generates Manim Python scripts using LLM"""
 
-    def __init__(self, model: str = "google/gemini-3.1-pro-preview"):
+    def __init__(self, model: str = DEFAULT_LLM_MODEL):
         self.model = model
 
         self.llm = ChatOpenAI(

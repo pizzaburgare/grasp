@@ -9,8 +9,6 @@ ROOT = Path(__file__).parent.parent
 CACHE_DIR = ROOT / ".cache"
 CACHE_AUDIO_DIR = CACHE_DIR / "audio"
 CACHE_MANIM_DIR = CACHE_DIR / "manim"
-CACHE_SCRIPTS_DIR = CACHE_DIR / "scripts"
-CACHE_LESSON_PLAN = CACHE_DIR / "lesson_plan.md"
 
 # --- Models (local weights) ---
 MODELS_DIR = ROOT / "models"
