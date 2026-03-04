@@ -90,27 +90,26 @@ uv run typecheck    # pyright only
 
 ```mermaid
 flowchart TD
-    A[Topic Input] --> B[1. Generate Lesson Plan\nvia OpenRouter LLM]
-    B --> C[2. Generate Manim Script\nvia OpenRouter LLM]
+    A[Topic Input] --> B["1. Generate Lesson Plan<br/>via OpenRouter LLM"]
+    B --> C["2. Generate Manim Script<br/>via OpenRouter LLM"]
     C --> D[Script saved to cache]
     D --> LOOP
 
-    subgraph LOOP["3. Iteration loop (max 3×, low quality)"]
-        direction TD
-        R[Render Video\nmanim -ql] --> AU[Generate Audio\nAudioManager + TTS]
-        AU --> M[Merge Audio & Video]
-        M --> ERR{Render\nerror?}
+    subgraph LOOP["3. Iteration loop (max 3x, low quality)"]
+        R["Render Video<br/>manim -ql"] --> AU["Generate Audio<br/>AudioManager + TTS"]
+        AU --> M[Merge Audio &amp; Video]
+        M --> ERR{Render error?}
         ERR -- Yes --> FIX[LLM fixes script]
         FIX --> R
-        ERR -- No --> REV[LLM reviews video\nfor visual issues]
+        ERR -- No --> REV["LLM reviews video<br/>for visual issues"]
         REV --> OK{Approved?}
         OK -- Yes --> DONE_LOOP[Exit loop early]
         OK -- No --> UPD[LLM rewrites script]
         UPD --> R
     end
 
-    LOOP --> FINAL{--final\nflag?}
-    FINAL -- Yes --> HQ[Re-render at high quality\nmanim -qh + merge]
+    LOOP --> FINAL{"--final flag?"}
+    FINAL -- Yes --> HQ["Re-render at high quality<br/>manim -qh + merge"]
     FINAL -- No --> OUT[Final Video Output]
     HQ --> OUT
 ```
