@@ -87,7 +87,9 @@ class CourseWorkflow:
             **{key: os.environ.get(key, "") for key in keys},
         }
 
-    def _build_cache_context(self, tts_engine: str, final_quality: bool) -> dict[str, Any]:
+    def _build_cache_context(
+        self, tts_engine: str, final_quality: bool
+    ) -> dict[str, Any]:
         """Build deterministic metadata that should invalidate cached script/video."""
         return {
             "model": self.model,
@@ -284,7 +286,10 @@ class CourseWorkflow:
                     continue
                 base_names = [_base_name(base) for base in cls.bases]
                 if any(
-                    name and (name == "Scene" or name.endswith("Scene") or name in scene_like)
+                    name
+                    and (
+                        name == "Scene" or name.endswith("Scene") or name in scene_like
+                    )
                     for name in base_names
                 ):
                     scene_like.append(cls.name)

@@ -127,7 +127,9 @@ def get_audio_cache_dir(lesson_name: str) -> Path:
     return get_lesson_cache_dir(lesson_name) / "audio"
 
 
-def get_cached_audio(lesson_name: str, text: str, *, salt: str | None = None) -> Optional[Path]:
+def get_cached_audio(
+    lesson_name: str, text: str, *, salt: str | None = None
+) -> Optional[Path]:
     """Return the cached WAV path for *text* if it exists, else ``None``."""
     p = get_audio_cache_dir(lesson_name) / f"{hash_text(text, salt=salt)}.wav"
     return p if p.exists() else None

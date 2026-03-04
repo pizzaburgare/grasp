@@ -101,7 +101,9 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
         if cached_wav.exists():
             shutil.copy2(cached_wav, out_path)
             with wave.open(str(out_path), "rb") as wf:
-                return (wf.getnframes() / wf.getframerate()) + AUDIO_DURATION_BUFFER_SECONDS
+                return (
+                    wf.getnframes() / wf.getframerate()
+                ) + AUDIO_DURATION_BUFFER_SECONDS
 
     audio, sr = engine.synthesize(text_to_speak)
     audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
@@ -181,7 +183,9 @@ class AudioManager:
                 if start_frame >= len(audio_data):
                     continue
                 end_frame = min(start_frame + len(audio_chunk), len(audio_data))
-                audio_data[start_frame:end_frame] = audio_chunk[: end_frame - start_frame]
+                audio_data[start_frame:end_frame] = audio_chunk[
+                    : end_frame - start_frame
+                ]
 
         merged_path = audio_dir / "merged_audio.wav"
         with wave.open(str(merged_path), "wb") as wav_file:
