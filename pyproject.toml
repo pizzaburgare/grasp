@@ -4,6 +4,10 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
+
+[project.scripts]
+lesson = "generate_lesson:main"
+
 dependencies = [
     "fastmcp>=3.0.2",
     "langchain>=1.2.10",
@@ -29,6 +33,12 @@ dev = [
     "pyright>=1.1.0",
     "ruff>=0.15.4",
 ]
+
+[tool.uv.scripts]
+lint = "ruff check"
+typecheck = "pyright"
+check = { cmd = "sh -c 'uv run ruff check && uv run pyright'" }
+test = "pytest tests/ -v"
 
 [tool.pyright]
 pythonVersion = "3.13"

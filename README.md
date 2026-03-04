@@ -50,9 +50,10 @@ AUDIO_MANAGER_VERBOSE=1
 ## Usage
 
 ```bash
-uv run python generate_lesson.py "LU Decomposition"
-uv run python generate_lesson.py "Fourier Transform" --input-dir ./slides
-uv run python generate_lesson.py "QR Decomposition" --final
+uv run lesson "LU Decomposition"
+uv run lesson "Fourier Transform" --input-dir ./slides
+uv run lesson "QR Decomposition" --final
+uv run lesson "QR Decomposition" --model anthropic/claude-sonnet-4-5
 ```
 
 ## Text-to-Speech
@@ -80,22 +81,38 @@ uv run pytest tests/test_audiomanager.py -v -m integration  # end-to-end
 ## Linting
 
 ```bash
-uv run pyright
-uv run ruff check
+uv run check        # ruff + pyright together
+uv run lint         # ruff only
+uv run typecheck    # pyright only
 ```
 
 ## Pipeline Overview
 
 ```mermaid
 flowchart TD
-    A[Topic Input] --> B[1. Generate Lesson Plan<br>via OpenRouter LLM]
-    B --> C[2. Generate Manim Script<br>via OpenRouter LLM]
-    C --> D[Mainim script created]
-    D --> E[3a. Render Video<br>manim command]
-    D --> F[3b. Generate Audio<br>AudioManager + TTS]
-    E --> G[4. Merge Audio & Video]
-    F --> G
-    G --> H[Final Video Output]
+    A[Topic Input] --> B[1. Generate Lesson Plan\nvia OpenRouter LLM]
+    B --> C[2. Generate Manim Script\nvia OpenRouter LLM]
+    C --> D[Script saved to cache]
+    D --> LOOP
+
+    subgraph LOOP["3. Iteration loop (max 3×, low quality)"]
+        direction TD
+        R[Render Video\nmanim -ql] --> AU[Generate Audio\nAudioManager + TTS]
+        AU --> M[Merge Audio & Video]
+        M --> ERR{Render\nerror?}
+        ERR -- Yes --> FIX[LLM fixes script]
+        FIX --> R
+        ERR -- No --> REV[LLM reviews video\nfor visual issues]
+        REV --> OK{Approved?}
+        OK -- Yes --> DONE_LOOP[Exit loop early]
+        OK -- No --> UPD[LLM rewrites script]
+        UPD --> R
+    end
+
+    LOOP --> FINAL{--final\nflag?}
+    FINAL -- Yes --> HQ[Re-render at high quality\nmanim -qh + merge]
+    FINAL -- No --> OUT[Final Video Output]
+    HQ --> OUT
 ```
 
 ## Configuration
@@ -105,4 +122,3 @@ The model used for both lesson planning and Manim script generation is set via `
 ## TODOs
 - Add RAG search for previous exam problems
 - Correlate colors with calculations
-- Add self-correcting execution loop for Manim code (retry on errors)
