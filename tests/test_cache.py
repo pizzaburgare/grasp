@@ -747,3 +747,150 @@ class TestWorkflowCacheIntegration:
         h_a = hash_context("topic", str(input_dir_a))
         h_b = hash_context("topic", str(input_dir_b))
         assert h_a != h_b
+
+
+# ===========================================================================
+# render_and_merge — MP4 selection logic
+# ===========================================================================
+
+
+class TestRenderAndMergeVideoSelection:
+    """Verify that render_and_merge picks the *most recently modified* MP4.
+
+    The manim media_dir is persistent across runs, so stale renders from
+    previous topics accumulate there.  The correct file must be the one that
+    was just written, not whatever rglob returns first.
+    """
+
+    def _make_workflow(self):
+        with (
+            patch("src.workflow.ChatOpenAI"),
+            patch("src.workflow.ManimScriptGenerator"),
+        ):
+            from src.workflow import CourseWorkflow
+
+            return CourseWorkflow(model="test-model")
+
+    def _write_mp4(self, path: Path, content: bytes = b"fake-mp4") -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    def test_selects_most_recently_modified_mp4(self, tmp_path, monkeypatch):
+        """With multiple stale MP4s in the cache, the newest one must be used."""
+        import time
+
+        manim_dir = tmp_path / "manim"
+        audio_dir = tmp_path / "audio"
+        out_dir = tmp_path / "output"
+
+        monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
+        monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
+
+        # Stale file written first (older mtime)
+        old_mp4 = manim_dir / "videos" / "oldhash" / "480p15" / "OldScene.mp4"
+        self._write_mp4(old_mp4, b"old-content")
+
+        # Ensure a measurable mtime gap
+        time.sleep(0.05)
+
+        # New file written after the render
+        new_mp4 = manim_dir / "videos" / "newhash" / "480p15" / "NewScene.mp4"
+        self._write_mp4(new_mp4, b"new-content")
+
+        # Fake script with a Scene subclass
+        script = tmp_path / "scene.py"
+        script.write_text(
+            "from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n"
+        )
+
+        wf = self._make_workflow()
+
+        # Patch _run_command_with_spinner to be a no-op (render already "done")
+        with (
+            patch.object(
+                wf,
+                "_run_command_with_spinner",
+                return_value=MagicMock(returncode=0),
+            ),
+            patch("src.workflow.VideoFileClip") as mock_video,
+            patch("src.workflow.AudioFileClip"),
+        ):
+            # No merged_audio.wav → takes the copy-without-audio path, so we only
+            # care about which video_path was found; capture it via VideoFileClip arg.
+            # Actually that path is only used when audio exists, so we verify via the
+            # copy path instead by checking which file gets copied.
+            import shutil
+
+            copied = {}
+
+            def fake_copy(src, dst):
+                copied["src"] = Path(src)
+
+            with patch("shutil.copy2", side_effect=fake_copy):
+                wf.render_and_merge(script, out_dir, "new-scene")
+
+        assert copied["src"] == new_mp4, (
+            f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
+        )
+
+    def test_single_mp4_is_always_selected(self, tmp_path, monkeypatch):
+        """When only one MP4 exists it must be picked regardless of mtime."""
+        manim_dir = tmp_path / "manim"
+        audio_dir = tmp_path / "audio"
+        out_dir = tmp_path / "output"
+
+        monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
+        monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
+
+        only_mp4 = manim_dir / "videos" / "abc" / "480p15" / "MyScene.mp4"
+        self._write_mp4(only_mp4)
+
+        script = tmp_path / "scene.py"
+        script.write_text(
+            "from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n"
+        )
+
+        wf = self._make_workflow()
+
+        with patch.object(
+            wf,
+            "_run_command_with_spinner",
+            return_value=MagicMock(returncode=0),
+        ):
+            copied = {}
+
+            def fake_copy(src, dst):
+                copied["src"] = Path(src)
+
+            with patch("shutil.copy2", side_effect=fake_copy):
+                wf.render_and_merge(script, out_dir, "my-scene")
+
+        assert copied["src"] == only_mp4
+
+    def test_partial_movie_files_excluded(self, tmp_path, monkeypatch):
+        """MP4s under partial_movie_files/ must never be selected."""
+        manim_dir = tmp_path / "manim"
+        audio_dir = tmp_path / "audio"
+        out_dir = tmp_path / "output"
+
+        monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
+        monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
+
+        # Only a partial_movie_files entry exists — no real output yet
+        partial = manim_dir / "videos" / "abc" / "partial_movie_files" / "chunk.mp4"
+        self._write_mp4(partial)
+
+        script = tmp_path / "scene.py"
+        script.write_text(
+            "from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n"
+        )
+
+        wf = self._make_workflow()
+
+        with patch.object(
+            wf,
+            "_run_command_with_spinner",
+            return_value=MagicMock(returncode=0),
+        ):
+            with pytest.raises(FileNotFoundError):
+                wf.render_and_merge(script, out_dir, "my-scene")

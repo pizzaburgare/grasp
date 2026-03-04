@@ -300,6 +300,7 @@ class CourseWorkflow:
             raise RuntimeError("Manim render failed — check output above.")
 
         # Find the rendered mp4 (exclude partial movie files)
+        # Sort by modification time and take the most recent to handle persistent cache
         mp4_files = [
             p
             for p in cache_manim.rglob("*.mp4")
@@ -307,7 +308,7 @@ class CourseWorkflow:
         ]
         if not mp4_files:
             raise FileNotFoundError(f"No MP4 found under {cache_manim} after render")
-        video_path = mp4_files[0]
+        video_path = max(mp4_files, key=lambda p: p.stat().st_mtime)
         print(f"Video rendered: {video_path}")
 
         # Merge audio
@@ -333,7 +334,6 @@ class CourseWorkflow:
                     str(final_path),
                     codec="libx264",
                     audio_codec="aac",
-                    verbose=False,
                     logger=None,
                 )
             finally:
