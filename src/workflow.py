@@ -19,12 +19,18 @@ from moviepy import AudioFileClip, VideoFileClip
 from pydantic import SecretStr
 
 from src.input_processor import process_input_dir
+from src.paths import (
+    CACHE_AUDIO_DIR,
+    CACHE_DIR,
+    CACHE_LESSON_PLAN,
+    CACHE_MANIM_DIR,
+    CACHE_SCRIPTS_DIR,
+    LESSON_PROMPT,
+)
 from src.script_generator import ManimScriptGenerator
 
 load_dotenv()
 logger = logging.getLogger(__name__)
-
-_CACHE_DIR = Path(".cache")
 
 
 class CourseWorkflow:
@@ -43,8 +49,7 @@ class CourseWorkflow:
 
         self.script_generator = ManimScriptGenerator(model=model)
 
-        prompt_path = Path(__file__).parent / "lesson_prompt.md"
-        self.lesson_prompt_template = prompt_path.read_text()
+        self.lesson_prompt_template = LESSON_PROMPT.read_text()
 
     # ------------------------------------------------------------------
     # Lesson planning
@@ -111,8 +116,8 @@ class CourseWorkflow:
         quality_label = "high" if final_quality else "low"
         print(f"Rendering scene: {scene_class} ({quality_label} quality)")
 
-        cache_audio = _CACHE_DIR / "audio"
-        cache_manim = _CACHE_DIR / "manim"
+        cache_audio = CACHE_AUDIO_DIR
+        cache_manim = CACHE_MANIM_DIR
         cache_audio.mkdir(parents=True, exist_ok=True)
         cache_manim.mkdir(parents=True, exist_ok=True)
 
@@ -182,10 +187,10 @@ class CourseWorkflow:
         slug = self._topic_to_slug(topic)
         out = Path(output_dir)
 
-        cache_scripts = _CACHE_DIR / "scripts"
+        cache_scripts = CACHE_SCRIPTS_DIR
         cache_scripts.mkdir(parents=True, exist_ok=True)
         script_path = cache_scripts / "lesson.py"
-        lesson_plan_path = _CACHE_DIR / "lesson_plan.md"
+        lesson_plan_path = CACHE_LESSON_PLAN
 
         print("=" * 60)
         print("Starting AI Course Generation Pipeline")
@@ -193,7 +198,7 @@ class CourseWorkflow:
         if input_dir:
             print(f"Input dir : {input_dir}")
         print(f"Output dir: {out}")
-        print(f"Cache dir : {_CACHE_DIR}")
+        print(f"Cache dir : {CACHE_DIR}")
         print("=" * 60)
 
         # Step 0: Process input materials

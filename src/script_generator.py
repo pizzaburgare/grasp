@@ -12,6 +12,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
+from src.paths import MANIM_PROMPT
+
 load_dotenv()
 
 
@@ -32,8 +34,7 @@ class ManimScriptGenerator:
             temperature=0.7,
         )
 
-        prompt_path = Path(__file__).parent / "manim_prompt.md"
-        with open(prompt_path) as f:
+        with open(MANIM_PROMPT) as f:
             self.system_prompt = f.read()
 
     def generate_script(

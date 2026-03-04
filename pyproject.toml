@@ -14,15 +14,23 @@ dependencies = [
     "numpy>=2.4.2",
     "openai>=2.24.0",
     "pillow>=11.0.0",
-    "piper-tts>=1.4.1",
     "pre-commit>=4.5.1",
+    "piper-tts>=1.4.1",
+    "qwen-tts>=0.1.0",
+    "torch>=2.3.0",
     "pypdfium2>=4.30.0",
     "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.0.0",
     "ruff>=0.15.4",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: end-to-end tests that download and run the TTS model locally",
 ]
 
 [tool.ruff.lint.per-file-ignores]

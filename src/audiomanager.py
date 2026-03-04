@@ -3,60 +3,55 @@ import wave
 from pathlib import Path
 
 import numpy as np
+from dotenv import load_dotenv
 from manim import Scene
-from piper.voice import PiperVoice
 
-_ROOT = Path(__file__).resolve().parent.parent
-MODEL_PATH = str(_ROOT / "models" / "en_US-ryan-high.onnx")
-CONFIG_PATH = str(_ROOT / "models" / "en_US-ryan-high.onnx.json")
+from .tts import TTSEngine, get_default_engine
+from src.paths import CACHE_AUDIO_DIR
+
+load_dotenv()
+
 CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
 
 
 def _audio_dir() -> Path:
-    """Return the directory where audio files are written.
-    Respects the AUDIO_OUTPUT_DIR environment variable; defaults to 'media/'."""
-    d = Path(os.environ.get("AUDIO_OUTPUT_DIR", "media"))
+    d = Path(os.environ.get("AUDIO_OUTPUT_DIR", str(CACHE_AUDIO_DIR)))
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def create_wav(text_to_speak: str, i: int) -> float:
-    voice = PiperVoice.load(MODEL_PATH, CONFIG_PATH, use_cuda=True)
+def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
+    audio, sr = engine.synthesize(text_to_speak)
+    audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
 
-    total_bytes_written = 0
     out_path = _audio_dir() / f"audio_{i}.wav"
     with wave.open(str(out_path), "wb") as wav_file:
         wav_file.setnchannels(CHANNELS)
         wav_file.setsampwidth(SAMPLE_WIDTH)
-        wav_file.setframerate(voice.config.sample_rate)
+        wav_file.setframerate(sr)
+        wav_file.writeframes(audio_int16.tobytes())
 
-        for chunk in voice.synthesize(text_to_speak):
-            wav_file.writeframes(chunk.audio_int16_bytes)
-            total_bytes_written += len(chunk.audio_int16_bytes)
-
-    total_frames = total_bytes_written // (CHANNELS * SAMPLE_WIDTH)
-    return (
-        total_frames / voice.config.sample_rate
-    ) + 1  # Add 1 second buffer for safety
+    return (len(audio_int16) / sr) + 1  # +1s buffer
 
 
 class AudioManager:
-    def __init__(self, scene: Scene):
+    def __init__(self, scene: Scene, engine: TTSEngine | None = None):
         self.i: int = 0
         self.scene = scene
+        self.engine = engine or get_default_engine()
         self.times: list[float] = []
         self.audio_durations: list[float] = []
 
-    def say(self, text):
+    def say(self, text: str) -> None:
         print(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
         self.i += 1
         self.times.append(self.scene.renderer.time)
-        duration = create_wav(text, self.i)
+        duration = create_wav(text, self.i, self.engine)
         self.audio_durations.append(duration)
         print(f"AudioManager: Audio duration is {duration:.2f} seconds")
 
-    def done_say(self):
+    def done_say(self) -> None:
         print("AudioManager: Done saying text")
         time_since_started = self.scene.renderer.time - self.times[-1]
         print(
@@ -67,7 +62,7 @@ class AudioManager:
             print(f"AudioManager: Sleeping for {to_sleep:.2f} seconds")
             self.scene.wait(to_sleep)
 
-    def merge_audio(self):
+    def merge_audio(self) -> None:
         if self.i == 0:
             print("AudioManager: No audio files to merge")
             return
