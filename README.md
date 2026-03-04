@@ -74,44 +74,41 @@ uv run pip install flash-attn --no-build-isolation
 ## Tests
 
 ```bash
-uv run pytest tests/ -v
-uv run pytest tests/test_audiomanager.py -v -m integration  # end-to-end
+uv run pytest                                          # all tests
+uv run pytest -m integration                           # end-to-end only
+uv run pytest tests/test_audiomanager.py               # single file
 ```
 
 ## Linting
 
 ```bash
-uv run check        # ruff + pyright together
-uv run lint         # ruff only
-uv run typecheck    # pyright only
+uv run ruff check && uv run pyright   # both together
+uv run ruff check                     # ruff only
+uv run pyright                        # pyright only
 ```
 
 ## Pipeline Overview
 
 ```mermaid
 flowchart TD
-    A[Topic Input] --> B["1. Generate Lesson Plan<br/>via OpenRouter LLM"]
-    B --> C["2. Generate Manim Script<br/>via OpenRouter LLM"]
-    C --> D[Script saved to cache]
-    D --> LOOP
+    A[Topic] --> B[1. Lesson Plan]
+    B --> C[2. Manim Script]
+    C --> R
 
-    subgraph LOOP["3. Iteration loop (max 3x, low quality)"]
-        R["Render Video<br/>manim -ql"] --> AU["Generate Audio<br/>AudioManager + TTS"]
-        AU --> M[Merge Audio &amp; Video]
-        M --> ERR{Render error?}
-        ERR -- Yes --> FIX[LLM fixes script]
-        FIX --> R
-        ERR -- No --> REV["LLM reviews video<br/>for visual issues"]
-        REV --> OK{Approved?}
-        OK -- Yes --> DONE_LOOP[Exit loop early]
-        OK -- No --> UPD[LLM rewrites script]
-        UPD --> R
+    subgraph LOOP["3. Iterate up to 3x at low quality"]
+        R[Render] --> ERR{Error?}
+        ERR -- Yes --> FIX[LLM fixes script] --> R
+        ERR -- No --> REV{LLM approves?}
+        REV -- No --> UPD[LLM rewrites script] --> R
     end
 
-    LOOP --> FINAL{"--final flag?"}
-    FINAL -- Yes --> HQ["Re-render at high quality<br/>manim -qh + merge"]
-    FINAL -- No --> OUT[Final Video Output]
-    HQ --> OUT
+    REV -- Yes --> OUT
+    LOOP --> OUT
+
+    OUT{--final?}
+    OUT -- Yes --> HQ[High quality re-render]
+    OUT -- No --> V[Final Video]
+    HQ --> V
 ```
 
 ## Configuration

@@ -1,13 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "ai-courses"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-
-[project.scripts]
-lesson = "generate_lesson:main"
-
 dependencies = [
     "fastmcp>=3.0.2",
     "langchain>=1.2.10",
@@ -27,18 +27,18 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
+[project.scripts]
+lesson = "src.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "pyright>=1.1.0",
     "ruff>=0.15.4",
 ]
-
-[tool.uv.scripts]
-lint = "ruff check"
-typecheck = "pyright"
-check = { cmd = "sh -c 'uv run ruff check && uv run pyright'" }
-test = "pytest tests/ -v"
 
 [tool.pyright]
 pythonVersion = "3.13"
@@ -52,6 +52,8 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "-v"
+testpaths = ["tests"]
 markers = [
     "integration: end-to-end tests that download and run the TTS model locally",
 ]
