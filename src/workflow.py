@@ -88,15 +88,25 @@ class CourseWorkflow:
             **{key: os.environ.get(key, "") for key in keys},
         }
 
+    def _build_script_context(self) -> dict[str, Any]:
+        """Metadata that determines whether to regenerate the lesson plan + script.
+
+        Intentionally excludes render quality and TTS config so that switching
+        between low/high quality (or TTS engines) reuses the same script.
+        """
+        return {
+            "model": self.model,
+            "lesson_prompt": self._prompt_digest(self.lesson_prompt_template),
+            "manim_prompt": self._prompt_digest(self.manim_prompt_template),
+        }
+
     def _build_cache_context(
         self, tts_engine: str, final_quality: bool
     ) -> dict[str, Any]:
-        """Build deterministic metadata that should invalidate cached script/video."""
+        """Full metadata including render settings — determines video cache validity."""
         return {
-            "model": self.model,
+            **self._build_script_context(),
             "quality": "high" if final_quality else "low",
-            "lesson_prompt": self._prompt_digest(self.lesson_prompt_template),
-            "manim_prompt": self._prompt_digest(self.manim_prompt_template),
             "tts": self._tts_config_fingerprint(tts_engine),
         }
 
@@ -456,7 +466,14 @@ class CourseWorkflow:
         if input_dir is None and INPUT_DIR.is_dir():
             input_dir = str(INPUT_DIR)
 
-        context_hash = hash_context(
+        # script_hash keys the lesson plan + Manim script (quality-independent)
+        script_hash = hash_context(
+            topic,
+            input_dir,
+            extra_context=self._build_script_context(),
+        )
+        # video_hash additionally encodes quality + TTS — keys the final video cache
+        video_hash = hash_context(
             topic,
             input_dir,
             extra_context=self._build_cache_context(tts_engine, final_quality),
@@ -475,11 +492,12 @@ class CourseWorkflow:
             print(f"Input dir:    {input_dir}")
         print(f"Output dir:   {out}")
         print(f"Cache dir:    {CACHE_DIR}")
-        print(f"Context hash: {context_hash}")
+        print(f"Script hash:  {script_hash}")
+        print(f"Video hash:   {video_hash}")
         print("=" * 60)
 
         # Fast path: nothing has changed — return the cached final video immediately
-        cached_video = get_cached_video(slug, context_hash)
+        cached_video = get_cached_video(slug, video_hash)
         if cached_video:
             usage_steps.extend(
                 [
@@ -490,8 +508,8 @@ class CourseWorkflow:
             print()
             print("=" * 60)
             print("Nothing has changed — all assets already cached.")
-            print(f"  script : .cache/{slug}/script/{context_hash}.py")
-            print(f"  video  : .cache/{slug}/video/{context_hash}.mp4")
+            print(f"  script : .cache/{slug}/script/{script_hash}.py")
+            print(f"  video  : .cache/{slug}/video/{video_hash}.mp4")
             print("=" * 60)
             out.mkdir(parents=True, exist_ok=True)
             final_path = out / f"{slug}.mp4"
@@ -523,8 +541,8 @@ class CourseWorkflow:
             image_count = sum(1 for p in input_parts if p["type"] == "image_url")
             print(f"   {len(input_files)} file(s) → {image_count} image parts")
 
-        # Step 1+2: Lesson plan & Manim script (both keyed by context hash)
-        script_path = get_lesson_cache_dir(slug) / "script" / f"{context_hash}.py"
+        # Step 1+2: Lesson plan & Manim script (keyed by script_hash, quality-independent)
+        script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
         lesson_plan_path = script_path.with_suffix(".md")
 
         if script_path.exists():
@@ -581,21 +599,23 @@ class CourseWorkflow:
         print()
 
         # Step 3: Render + merge (with iterative review / error-fix loop)
+        # All iterations use low quality for speed; the final high-quality render
+        # is done once at the end when the script is finalized.
         max_iters = MAX_SCRIPT_ITERATIONS
         final_video: Path | None = None
 
         for iteration in range(max_iters):
             iter_label = f"[iter {iteration + 1}/{max_iters}]"
-            print(f"Step 3 {iter_label}: Render + merge")
+            print(f"Step 3 {iter_label}: Render + merge (low quality)")
 
             try:
                 final_video = self.render_and_merge(
                     script_path,
                     out,
                     slug,
-                    final_quality,
+                    False,  # always low quality during iteration
                     lesson_name=slug,
-                    context_hash=context_hash,
+                    context_hash=None,  # don't cache intermediate renders
                 )
             except (RuntimeError, FileNotFoundError) as exc:
                 # Compilation / render failure
@@ -655,6 +675,23 @@ class CourseWorkflow:
 
         if final_video is None:
             raise RuntimeError("All render iterations failed.")
+
+        # Final render at the requested quality (caches the result)
+        if final_quality:
+            print(f"Step 3 [final]: Render + merge (high quality)")
+            final_video = self.render_and_merge(
+                script_path,
+                out,
+                slug,
+                final_quality,
+                lesson_name=slug,
+                context_hash=video_hash,
+            )
+        else:
+            # Low quality was already the target — save to video cache now
+            from src.cache import save_video_to_cache as _save_video
+
+            _save_video(slug, video_hash, final_video)
 
         print()
         print("=" * 60)
