@@ -11,6 +11,7 @@ import base64
 import io
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pypdfium2 as pdfium
@@ -54,24 +55,31 @@ def extract_pdf_pages(
     path: Path, scale: int = 1, max_pages: int = MAX_PDF_PAGES
 ) -> list[str]:
     """Render each page of a PDF as a JPEG data-URI."""
+    if scale <= 0:
+        raise ValueError("scale must be > 0")
+    if max_pages <= 0:
+        raise ValueError("max_pages must be > 0")
+
     doc = pdfium.PdfDocument(str(path))
-    n_pages = min(len(doc), max_pages)
-    if len(doc) > max_pages:
-        logger.warning(
-            "PDF %s has %d pages; capping to %d", path.name, len(doc), max_pages
-        )
-    uris: list[str] = []
-    for i, page in enumerate(doc):
-        if i >= n_pages:
-            break
-        bitmap = page.render(scale=scale, rotation=0)
-        pil_image = bitmap.to_pil()
-        buf = io.BytesIO()
-        pil_image.convert("RGB").save(buf, format="JPEG", quality=85)
-        data = base64.b64encode(buf.getvalue()).decode()
-        uris.append(f"data:image/jpeg;base64,{data}")
-    doc.close()
-    return uris
+    try:
+        n_pages = min(len(doc), max_pages)
+        if len(doc) > max_pages:
+            logger.warning(
+                "PDF %s has %d pages; capping to %d", path.name, len(doc), max_pages
+            )
+        uris: list[str] = []
+        for i, page in enumerate(doc):
+            if i >= n_pages:
+                break
+            bitmap = page.render(scale=scale, rotation=0)
+            pil_image = bitmap.to_pil()
+            buf = io.BytesIO()
+            pil_image.convert("RGB").save(buf, format="JPEG", quality=85)
+            data = base64.b64encode(buf.getvalue()).decode()
+            uris.append(f"data:image/jpeg;base64,{data}")
+        return uris
+    finally:
+        doc.close()
 
 
 def extract_video_frames(
@@ -80,32 +88,47 @@ def extract_video_frames(
     max_frames: int = MAX_VIDEO_FRAMES,
 ) -> list[str]:
     """Sample a video at *fps* frames per second and return base64 data-URIs."""
+    if fps <= 0:
+        raise ValueError("fps must be > 0")
+    if max_frames <= 0:
+        raise ValueError("max_frames must be > 0")
+
     clip = VideoFileClip(str(path))
-    duration = clip.duration
-    interval = 1.0 / fps
-    timestamps = [t * interval for t in range(int(duration * fps))]
+    try:
+        duration = float(clip.duration or 0.0)
+        if duration <= 0:
+            logger.warning("Video %s has non-positive duration; skipping", path.name)
+            return []
 
-    if len(timestamps) > max_frames:
-        logger.warning(
-            "Video %s has %d frames at %d fps; capping to %d",
-            path.name,
-            len(timestamps),
-            fps,
-            max_frames,
-        )
-        step = len(timestamps) / max_frames
-        timestamps = [timestamps[int(i * step)] for i in range(max_frames)]
+        interval = 1.0 / fps
+        n_samples = max(1, int(duration * fps))
+        max_t = max(0.0, duration - 1e-3)
+        timestamps = [min(t * interval, max_t) for t in range(n_samples)]
 
-    uris: list[str] = []
-    for t in timestamps:
-        uris.append(_frame_to_data_uri(clip.get_frame(t)))
-    clip.close()
-    return uris
+        if len(timestamps) > max_frames:
+            logger.warning(
+                "Video %s has %d frames at %d fps; capping to %d",
+                path.name,
+                len(timestamps),
+                fps,
+                max_frames,
+            )
+            step = len(timestamps) / max_frames
+            timestamps = [timestamps[int(i * step)] for i in range(max_frames)]
+
+        uris: list[str] = []
+        for t in timestamps:
+            frame = clip.get_frame(t)
+            if frame is not None:
+                uris.append(_frame_to_data_uri(frame))
+        return uris
+    finally:
+        clip.close()
 
 
 def process_input_dir(
     input_dir: str | Path, max_video_frames: int = MAX_VIDEO_FRAMES
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Walk *input_dir* and return a list of LangChain-compatible content parts
     (``{"type": "text", ...}`` or ``{"type": "image_url", ...}``).

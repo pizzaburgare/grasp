@@ -93,19 +93,17 @@ class TestQwenTTSEngine:
     def test_passes_speaker_and_language_to_model(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
         mock_raw_model = MagicMock()
+        mock_raw_model.model.tts_model_type = "custom_voice"
         mock_raw_model.generate_custom_voice.return_value = ([ONE_SECOND], SAMPLE_RATE)
         from src.tts.qwen import QwenTTSEngine
 
-        engine = QwenTTSEngine(
-            speaker="Aiden", language="English", instruct="Speak slowly."
-        )
+        engine = QwenTTSEngine(speaker="Aiden", language="English")
         with patch.object(engine, "_load_model", return_value=mock_raw_model):
             engine.synthesize("Speaker test")
         mock_raw_model.generate_custom_voice.assert_called_once_with(
             text="Speaker test",
             language="English",
             speaker="Aiden",
-            instruct="Speak slowly.",
         )
 
     def test_returns_cpu_when_no_accelerator(self, monkeypatch):
@@ -130,14 +128,12 @@ class TestQwenTTSEngine:
         monkeypatch.setenv("QWEN_TTS_MODEL", "Qwen/some-model")
         monkeypatch.setenv("QWEN_TTS_SPEAKER", "Vivian")
         monkeypatch.setenv("QWEN_TTS_LANGUAGE", "Chinese")
-        monkeypatch.setenv("QWEN_TTS_INSTRUCT", "Whisper.")
         from src.tts.qwen import QwenTTSEngine
 
         engine = QwenTTSEngine.from_env()
         assert engine.model_id == "Qwen/some-model"
         assert engine.speaker == "Vivian"
         assert engine.language == "Chinese"
-        assert engine.instruct == "Whisper."
 
     def test_dtype_is_bfloat16_on_mps(self, monkeypatch):
         import torch
@@ -167,6 +163,7 @@ class TestQwenTTSEngine:
 
         tensor_audio = torch.zeros(SAMPLE_RATE, dtype=torch.float32)
         mock_raw_model = MagicMock()
+        mock_raw_model.model.tts_model_type = "custom_voice"
         mock_raw_model.generate_custom_voice.return_value = (
             [tensor_audio],
             SAMPLE_RATE,
@@ -185,6 +182,7 @@ class TestQwenTTSEngine:
         """If the model returns a 2-D array, synthesize() takes the first channel."""
         stereo = np.ones((2, SAMPLE_RATE), dtype=np.float32) * 0.5
         mock_raw_model = MagicMock()
+        mock_raw_model.model.tts_model_type = "custom_voice"
         mock_raw_model.generate_custom_voice.return_value = ([stereo], SAMPLE_RATE)
         from src.tts.qwen import QwenTTSEngine
 
@@ -322,6 +320,16 @@ class TestAudioManager:
         mgr = AudioManager(scene, engine=engine)
         mgr.say("Short")
         scene.renderer.time = 999.0
+        mgr.done_say()
+        scene.wait.assert_not_called()
+
+    def test_done_say_before_say_is_noop(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
+        engine = _make_mock_engine()
+        from src.audiomanager import AudioManager
+
+        scene = self._make_scene()
+        mgr = AudioManager(scene, engine=engine)
         mgr.done_say()
         scene.wait.assert_not_called()
 

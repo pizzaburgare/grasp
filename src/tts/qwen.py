@@ -110,7 +110,7 @@ class QwenTTSEngine(TTSEngine):
 
         audio = wavs[0]
         if hasattr(audio, "detach"):  # torch.Tensor → numpy
-            audio = audio.detach().cpu().numpy()
+            audio = audio.detach().cpu().numpy()  # type: ignore[union-attr]
         audio = np.asarray(audio, dtype=np.float32)
         if audio.ndim == 2:
             audio = audio[0]

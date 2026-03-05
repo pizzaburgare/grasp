@@ -27,7 +27,19 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
+    "pyright>=1.1.0",
     "ruff>=0.15.4",
+]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+reportMissingModuleSource = false
+# Exclude generated/cache artefacts
+exclude = [
+    ".cache",
+    "output",
+    ".venv",
 ]
 
 [tool.pytest.ini_options]

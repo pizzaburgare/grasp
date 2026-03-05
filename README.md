@@ -41,6 +41,10 @@ KOKORO_SPEED=1.2
 
 # Output directory for audio clips and merged audio
 AUDIO_OUTPUT_DIR=.cache/audio
+
+# AudioManager log verbosity during Manim render (0 = quiet, 1 = verbose)
+# The workflow forces this to 0 while compiling so terminal output stays clean.
+AUDIO_MANAGER_VERBOSE=1
 ```
 
 ## Usage
@@ -73,16 +77,23 @@ uv run pytest tests/ -v
 uv run pytest tests/test_audiomanager.py -v -m integration  # end-to-end
 ```
 
+## Linting
+
+```bash
+uv run pyright
+uv run ruff check
+```
+
 ## Pipeline Overview
 
 ```mermaid
 flowchart TD
     A[Topic Input] --> B[1. Generate Lesson Plan<br>via OpenRouter LLM]
     B --> C[2. Generate Manim Script<br>via OpenRouter LLM]
-    C --> D[main.py created]
+    C --> D[Mainim script created]
     D --> E[3a. Render Video<br>manim command]
     D --> F[3b. Generate Audio<br>AudioManager + TTS]
-    E --> G[4. Merge Audio & Video<br>merge_audio_video.py]
+    E --> G[4. Merge Audio & Video]
     F --> G
     G --> H[Final Video Output]
 ```
