@@ -39,7 +39,7 @@ def transcribe_audio(input_file: str):
     result = model.transcribe(input_file)
 
     timestamps = "\n".join(
-        f"[{segment['start']:.2f}s -> {segment['end']:.2f}s] {segment['text']}"  # type: ignore
+        f"{segment['start']:.2f}s -> {segment['end']:.2f}s --- {segment['text']}"  # type: ignore
         for segment in result["segments"]
     )
     return timestamps
@@ -54,11 +54,52 @@ def mp4_to_text(video_path: str, output_markdown_path: str):
         f.write(transcription)
 
 
+def get_lines(file_path: str) -> list[str]:
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.readlines()
+
+
+def get_start_times(file_path: str) -> list[float]:
+    start_times = []
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            # Check if the line contains our expected separator
+            if "s ->" in line:
+                # Split the line at "s ->" and grab the first part (the start time)
+                time_str = line.split("s ->")[0].strip()
+                start_times.append(float(time_str))
+
+    return start_times
+
+
+def process_frame(video_file, timestamp):
+    """
+    Extracts a frame from the video at the specified timestamp.
+    """
+    try:
+        video_clip = VideoFileClip(video_file)
+        frame = video_clip.get_frame(timestamp)
+        video_clip.close()
+        return str(frame.shape[:2])
+    except Exception as e:
+        print(f"An error occurred while processing the frame: {e}")
+        return "None"
+
+
 if __name__ == "__main__":
     INPUT_FILE = "test.mp4"
     TRANSCRIPTION_FILE = "test.txt"
 
-    # mp4_to_mp3(INPUT_FILE, MP3_FILE)
-    # transcribe_audio(MP3_FILE, TRANSCRIPTION_FILE)
+    # mp4_to_text(INPUT_FILE, TRANSCRIPTION_FILE)
 
-    mp4_to_text(INPUT_FILE, TRANSCRIPTION_FILE)
+    speech = get_lines(TRANSCRIPTION_FILE)
+    times = get_start_times(TRANSCRIPTION_FILE)
+
+    transcription = ""
+    for time, line in zip(times, speech):
+        transcription += f"{time:.2f}s: {line.strip()}\n"
+        transcription += f"Description of the frame at {time:.2f}s\n"
+        transcription += f"{process_frame(INPUT_FILE, time)}"  # Here we should describe it using a VLM
+
+    print(transcription)
