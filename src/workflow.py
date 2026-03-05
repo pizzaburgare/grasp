@@ -9,9 +9,10 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import IO, Any, Optional
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -37,7 +38,13 @@ from src.paths import (
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
-from src.settings import DEFAULT_LLM_MODEL, DEFAULT_TTS_ENGINE, MAX_SCRIPT_ITERATIONS
+from src.settings import (
+    LESSON_PLANNER_MODEL,
+    MANIM_GENERATOR_MODEL,
+    MAX_SCRIPT_ITERATIONS,
+    VIDEO_REVIEW_MODEL,
+    DEFAULT_TTS_ENGINE,
+)
 from src.script_generator import ManimScriptGenerator
 
 load_dotenv()
@@ -45,11 +52,20 @@ logger = logging.getLogger(__name__)
 
 
 class CourseWorkflow:
-    def __init__(self, model: str = DEFAULT_LLM_MODEL):
-        self.model = model
+    def __init__(self, model: str | None = None):
+        # If a global model override is supplied (e.g. via --model CLI flag)
+        # it takes precedence over every stage's env-configured model.
+        planner_model = model or LESSON_PLANNER_MODEL
+        manim_model = model or MANIM_GENERATOR_MODEL
+        review_model = model or VIDEO_REVIEW_MODEL
+
+        # Expose the planner model as self.model for cache-key / logging use.
+        self.model = planner_model
+        self.manim_model = manim_model
+        self.review_model = review_model
 
         self.planner_llm = ChatOpenAI(
-            model=model,
+            model=planner_model,
             api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
             base_url="https://openrouter.ai/api/v1",
             default_headers={
@@ -58,7 +74,10 @@ class CourseWorkflow:
             },
         )
 
-        self.script_generator = ManimScriptGenerator(model=model)
+        self.script_generator = ManimScriptGenerator(
+            generation_model=manim_model,
+            review_model=review_model,
+        )
 
         self.lesson_prompt_template = LESSON_PROMPT.read_text()
         self.manim_prompt_template = MANIM_PROMPT.read_text()
@@ -95,7 +114,9 @@ class CourseWorkflow:
         between low/high quality (or TTS engines) reuses the same script.
         """
         return {
-            "model": self.model,
+            "planner_model": self.model,
+            "manim_model": self.manim_model,
+            "review_model": self.review_model,
             "lesson_prompt": self._prompt_digest(self.lesson_prompt_template),
             "manim_prompt": self._prompt_digest(self.manim_prompt_template),
         }
@@ -256,6 +277,24 @@ class CourseWorkflow:
             text=True,
         )
 
+        # Drain stdout/stderr on background threads to prevent the OS pipe
+        # buffer (~64 KB) from filling up and deadlocking the subprocess.
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
+
+        def _drain(pipe: IO[str], buf: list[str]) -> None:
+            for chunk in iter(lambda: pipe.read(4096), ""):
+                buf.append(chunk)
+
+        t_out = threading.Thread(
+            target=_drain, args=(process.stdout, stdout_chunks), daemon=True
+        )
+        t_err = threading.Thread(
+            target=_drain, args=(process.stderr, stderr_chunks), daemon=True
+        )
+        t_out.start()
+        t_err.start()
+
         i = 0
         while process.poll() is None:
             elapsed = time.perf_counter() - start
@@ -267,15 +306,16 @@ class CourseWorkflow:
             time.sleep(0.2)
             i += 1
 
-        stdout, stderr = process.communicate()
+        t_out.join()
+        t_err.join()
         elapsed = time.perf_counter() - start
         print(f"\r{status_label} ✓ {elapsed:5.1f}s")
 
         return subprocess.CompletedProcess(
             args=command,
             returncode=process.returncode if process.returncode is not None else 1,
-            stdout=stdout,
-            stderr=stderr,
+            stdout="".join(stdout_chunks),
+            stderr="".join(stderr_chunks),
         )
 
     # ------------------------------------------------------------------
@@ -678,7 +718,7 @@ class CourseWorkflow:
 
         # Final render at the requested quality (caches the result)
         if final_quality:
-            print(f"Step 3 [final]: Render + merge (high quality)")
+            print("Step 3 [final]: Render + merge (high quality)")
             final_video = self.render_and_merge(
                 script_path,
                 out,

@@ -19,7 +19,7 @@ from pydantic import SecretStr
 
 from src.llm_metrics import LLMUsage, extract_llm_usage
 from src.paths import MANIM_PROMPT
-from src.settings import DEFAULT_LLM_MODEL
+from src.settings import MANIM_GENERATOR_MODEL, VIDEO_REVIEW_MODEL
 
 load_dotenv()
 
@@ -31,11 +31,16 @@ _REVIEW_FRAME_QUALITY = 70
 class ManimScriptGenerator:
     """Generates Manim Python scripts using LLM"""
 
-    def __init__(self, model: str = DEFAULT_LLM_MODEL):
-        self.model = model
+    def __init__(
+        self,
+        generation_model: str = MANIM_GENERATOR_MODEL,
+        review_model: str = VIDEO_REVIEW_MODEL,
+    ):
+        self.model = generation_model
+        self.review_model = review_model
 
         self.llm = ChatOpenAI(
-            model=model,
+            model=generation_model,
             api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
             base_url="https://openrouter.ai/api/v1",
             default_headers={
@@ -43,6 +48,16 @@ class ManimScriptGenerator:
                 "X-Title": "Manim Script Generator",
             },
             temperature=0.7,
+        )
+
+        self.review_llm = ChatOpenAI(
+            model=review_model,
+            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "http://localhost",
+                "X-Title": "Manim Video Reviewer",
+            },
         )
 
         with open(MANIM_PROMPT) as f:
@@ -164,7 +179,7 @@ Generate a complete Manim script that:
             parts: list[dict[str, Any]] = []
             t = 0.0
             while t < duration:
-                frame: np.ndarray = clip.get_frame(t)
+                frame: np.ndarray = clip.get_frame(t)  # type: ignore[assignment]
                 img = Image.fromarray(frame)
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
@@ -230,7 +245,7 @@ Generate a complete Manim script that:
             HumanMessage(content=user_content),
         ]
 
-        response = self.llm.invoke(messages)
+        response = self.review_llm.invoke(messages)
         self.last_review_usage = extract_llm_usage(response)
         answer = str(response.content).strip()
 

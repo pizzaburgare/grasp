@@ -1,6 +1,7 @@
 import os
 import shutil
 import wave
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +11,11 @@ from manim import Scene
 from src.cache import hash_text
 from .tts import TTSEngine, get_default_engine
 from src.paths import CACHE_AUDIO_DIR
-from src.settings import AUDIO_DURATION_BUFFER_SECONDS
+from src.settings import (
+    AUDIO_DURATION_BUFFER_SECONDS,
+    TTS_MAX_SECONDS_PER_WORD,
+    TTS_SYNTHESIS_TIMEOUT_SECONDS,
+)
 
 load_dotenv()
 
@@ -105,7 +110,26 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
                     wf.getnframes() / wf.getframerate()
                 ) + AUDIO_DURATION_BUFFER_SECONDS
 
-    audio, sr = engine.synthesize(text_to_speak)
+    word_count = max(len(text_to_speak.split()), 1)
+    with ThreadPoolExecutor(max_workers=1) as _executor:
+        _future = _executor.submit(engine.synthesize, text_to_speak)
+        try:
+            audio, sr = _future.result(timeout=TTS_SYNTHESIS_TIMEOUT_SECONDS)
+        except FuturesTimeoutError:
+            raise RuntimeError(
+                f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s "
+                f"({word_count} words)"
+            )
+
+    actual_duration = len(audio) / sr
+    max_duration = word_count * TTS_MAX_SECONDS_PER_WORD
+    if actual_duration > max_duration:
+        raise RuntimeError(
+            f"TTS output rejected: {actual_duration:.1f}s for {word_count} words "
+            f"(limit {max_duration:.1f}s at {TTS_MAX_SECONDS_PER_WORD}s/word). "
+            "Likely corrupt/runaway model output."
+        )
+
     audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
 
     with wave.open(str(out_path), "wb") as wav_file:

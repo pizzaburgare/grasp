@@ -9,7 +9,11 @@ Usage (after uv sync):
 
 import argparse
 
-from src.settings import DEFAULT_LLM_MODEL
+from src.settings import (
+    LESSON_PLANNER_MODEL,
+    MANIM_GENERATOR_MODEL,
+    VIDEO_REVIEW_MODEL,
+)
 from src.workflow import CourseWorkflow
 
 
@@ -41,9 +45,14 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=str,
-        default=DEFAULT_LLM_MODEL,
+        default=None,
         metavar="MODEL",
-        help=f"OpenRouter model for planning and script generation (default: {DEFAULT_LLM_MODEL})",
+        help=(
+            "Override all pipeline stages with a single OpenRouter model. "
+            "When omitted, each stage uses its env-configured model "
+            f"(planner: {LESSON_PLANNER_MODEL}, manim: {MANIM_GENERATOR_MODEL}, "
+            f"review: {VIDEO_REVIEW_MODEL})."
+        ),
     )
     parser.add_argument(
         "--final",

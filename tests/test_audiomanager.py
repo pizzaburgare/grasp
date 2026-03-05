@@ -305,7 +305,7 @@ class TestAudioManager:
         from src.audiomanager import AudioManager
 
         mgr = AudioManager(scene, engine=engine)
-        mgr.say("Long sentence")
+        mgr.say("This is a sufficiently long sentence")  # 6 words → 6s limit > 3s audio
         scene.renderer.time = 1.0
         mgr.done_say()
         scene.wait.assert_called_once()

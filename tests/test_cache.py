@@ -707,6 +707,7 @@ class TestWorkflowCacheIntegration:
 
         out_dir = tmp_path / "output"
 
+        _cached_script = "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan") as mock_plan,
             patch.object(
@@ -714,23 +715,24 @@ class TestWorkflowCacheIntegration:
                 "render_and_merge",
                 return_value=out_dir / "fourier-transform.mp4",
             ) as mock_render,
+            patch("src.cache.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
+            # Script cache uses _build_script_context() (quality/TTS-independent)
             ctx_hash = hash_context(
                 topic,
-                extra_context=wf._build_cache_context("kokoro", False),
+                extra_context=wf._build_script_context(),
             )
 
             # Pre-populate script cache with a valid minimal Manim script + lesson plan
             script_dir = patched_cache_dir / slug / "script"
             script_dir.mkdir(parents=True)
             script_path = script_dir / f"{ctx_hash}.py"
-            script_path.write_text(
-                "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
-            )
+            script_path.write_text(_cached_script)
             (script_dir / f"{ctx_hash}.md").write_text("# cached plan")
 
             wf.script_generator = MagicMock()
+            wf.script_generator.review_video.return_value = (_cached_script, False)
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         mock_plan.assert_not_called()  # lesson plan is skipped
@@ -741,7 +743,6 @@ class TestWorkflowCacheIntegration:
         self, tmp_path, patched_cache_dir
     ):
         """On a cache miss render_and_merge receives lesson_name and context_hash."""
-        from src.cache import hash_context
         from src.workflow import CourseWorkflow
 
         topic = "QR Decomposition"
@@ -754,18 +755,30 @@ class TestWorkflowCacheIntegration:
             patch.object(
                 CourseWorkflow, "render_and_merge", return_value=fake_video
             ) as mock_render,
+            patch("src.cache.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
+
+            def _gen_save_effect(**kwargs):
+                path = kwargs.get("output_path")
+                if path:
+                    Path(path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(path).write_text(
+                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
+                    )
+
             wf.script_generator = MagicMock()
-            ctx_hash = hash_context(
-                topic,
-                extra_context=wf._build_cache_context("kokoro", False),
+            wf.script_generator.generate_and_save.side_effect = _gen_save_effect
+            wf.script_generator.review_video.return_value = (
+                "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
+                False,
             )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         _, kwargs = mock_render.call_args
         assert kwargs.get("lesson_name") == slug
-        assert kwargs.get("context_hash") == ctx_hash
+        # Iterative renders use context_hash=None; caching happens via save_video_to_cache
+        assert kwargs.get("context_hash") is None
 
     def test_lesson_plan_stored_alongside_script_as_md(
         self, tmp_path, patched_cache_dir
@@ -787,16 +800,32 @@ class TestWorkflowCacheIntegration:
                 "render_and_merge",
                 return_value=out_dir / f"{slug}.mp4",
             ),
+            patch("src.cache.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
-            wf.script_generator = MagicMock()
-            ctx_hash = hash_context(
+            # Script files are keyed by _build_script_context() hash
+            script_hash = hash_context(
                 topic,
-                extra_context=wf._build_cache_context("kokoro", False),
+                extra_context=wf._build_script_context(),
+            )
+
+            def _gen_save_effect(**kwargs):
+                path = kwargs.get("output_path")
+                if path:
+                    Path(path).parent.mkdir(parents=True, exist_ok=True)
+                    Path(path).write_text(
+                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
+                    )
+
+            wf.script_generator = MagicMock()
+            wf.script_generator.generate_and_save.side_effect = _gen_save_effect
+            wf.script_generator.review_video.return_value = (
+                "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
+                False,
             )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
-        plan_path = patched_cache_dir / slug / "script" / f"{ctx_hash}.md"
+        plan_path = patched_cache_dir / slug / "script" / f"{script_hash}.md"
         assert plan_path.exists(), "lesson plan .md file should be in script/ dir"
         assert plan_path.read_text() == "# my plan"
         # Must NOT write a stray lesson_plan.md at the per-lesson root
