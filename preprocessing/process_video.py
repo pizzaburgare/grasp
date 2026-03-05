@@ -81,25 +81,29 @@ def process_frame(video_file, timestamp):
         video_clip = VideoFileClip(video_file)
         frame = video_clip.get_frame(timestamp)
         video_clip.close()
-        return str(frame.shape[:2])
+        return (
+            f"Description of image at {timestamp} resolution is {str(frame.shape[:2])}"
+        )
     except Exception as e:
         print(f"An error occurred while processing the frame: {e}")
-        return "None"
+        return f"Error processing image at {timestamp:.2f}s"
 
 
 if __name__ == "__main__":
     INPUT_FILE = "test.mp4"
     TRANSCRIPTION_FILE = "test.txt"
 
-    # mp4_to_text(INPUT_FILE, TRANSCRIPTION_FILE)
+    mp4_to_text(INPUT_FILE, TRANSCRIPTION_FILE)
 
     speech = get_lines(TRANSCRIPTION_FILE)
     times = get_start_times(TRANSCRIPTION_FILE)
 
     transcription = ""
     for time, line in zip(times, speech):
-        transcription += f"{time:.2f}s: {line.strip()}\n"
-        transcription += f"Description of the frame at {time:.2f}s\n"
-        transcription += f"{process_frame(INPUT_FILE, time)}"  # Here we should describe it using a VLM
-
-    print(transcription)
+        transcription += f"{line.strip()}\n"
+        transcription += (
+            process_frame(INPUT_FILE, time) + "\n"
+        )  # Here we should describe it using a VLM
+    # write everything back containing image descriptions
+    with open(TRANSCRIPTION_FILE, "w", encoding="utf-8") as f:
+        f.write(transcription)
