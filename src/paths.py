@@ -14,10 +14,11 @@ CACHE_MANIM_DIR = CACHE_DIR / "manim"
 MODELS_DIR = ROOT / "models"
 PIPER_DEFAULT_MODEL = MODELS_DIR / "en_US-ryan-high.onnx"
 
-# --- Source prompts ---
-SRC_DIR = ROOT / "src"
-LESSON_PROMPT = SRC_DIR / "lesson_prompt.md"
-MANIM_PROMPT = SRC_DIR / "manim_prompt.md"
+# --- Prompts ---
+PROMPTS_DIR = ROOT / "prompts"
+LESSON_PROMPT = PROMPTS_DIR / "lesson_prompt.md"
+MANIM_PROMPT = PROMPTS_DIR / "manim_prompt.md"
+VIDEO_REVIEW_PROMPT = PROMPTS_DIR / "video_review_prompt.md"
 
 # --- Default input ---
 INPUT_DIR = ROOT / "input"

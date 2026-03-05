@@ -18,7 +18,7 @@ from PIL import Image
 from pydantic import SecretStr
 
 from src.llm_metrics import LLMUsage, extract_llm_usage
-from src.paths import MANIM_PROMPT
+from src.paths import MANIM_PROMPT, VIDEO_REVIEW_PROMPT
 from src.settings import MANIM_GENERATOR_MODEL, VIDEO_REVIEW_MODEL
 
 load_dotenv()
@@ -62,6 +62,9 @@ class ManimScriptGenerator:
 
         with open(MANIM_PROMPT) as f:
             self.system_prompt = f.read()
+
+        with open(VIDEO_REVIEW_PROMPT) as f:
+            self.review_prompt_template = f.read()
 
         self.last_generation_usage: LLMUsage | None = None
 
@@ -215,28 +218,14 @@ Generate a complete Manim script that:
             print("  Could not extract frames — skipping review.")
             return script, False
 
+        review_text = (
+            f"Topic: {topic}\n\n"
+            + self.review_prompt_template
+            + f"\n\n--- SOURCE CODE ---\n```python\n{script}\n```"
+        )
+
         user_content: list[str | dict[str, Any]] = [
-            {
-                "type": "text",
-                "text": (
-                    f"Topic: {topic}\n\n"
-                    "Below are sampled frames from a Manim-rendered educational video, "
-                    "followed by the Python source code that produced it.\n\n"
-                    "Check the video frames for ANY of these problems:\n"
-                    "  • Text or equations clipped / cut off at the edges\n"
-                    "  • Overlapping or unreadable content\n"
-                    "  • Broken or glitchy animations (artifacts, misplaced objects)\n"
-                    "  • Content overflowing outside the visible frame\n"
-                    "  • Missing or blank sections that should have content\n"
-                    "  • Incorrect visual representations of math concepts\n\n"
-                    "If the video looks acceptable, respond with EXACTLY the string:\n"
-                    '"APPROVED"\n\n'
-                    "If there are problems, respond with the COMPLETE corrected Python "
-                    "script that fixes them. Output ONLY the code, no markdown fences, "
-                    "no explanations.\n\n"
-                    f"--- SOURCE CODE ---\n```python\n{script}\n```"
-                ),
-            },
+            {"type": "text", "text": review_text},
             *frames,
         ]
 
