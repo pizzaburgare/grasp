@@ -25,8 +25,8 @@ PDF_EXTENSIONS = {".pdf"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
-MAX_VIDEO_FRAMES = 120
-MAX_PDF_PAGES = 30
+MAX_VIDEO_FRAMES = 240
+MAX_PDF_PAGES = 60
 
 
 def _encode_image_file(path: Path) -> str:
