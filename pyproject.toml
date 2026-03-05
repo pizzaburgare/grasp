@@ -26,6 +26,8 @@ dependencies = [
     "pypdfium2>=4.30.0",
     "python-dotenv>=1.2.2",
     "markitdown[pdf]>=0.1.5",
+    "pyreadline3>=3.5.4",
+    "openai-whisper>=20250625",
 ]
 
 [project.scripts]
