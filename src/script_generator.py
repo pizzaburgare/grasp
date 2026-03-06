@@ -253,13 +253,17 @@ Generate a complete Manim script that:
 
     @staticmethod
     def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
-        """Return cosine similarity between two frames as flat float32 vectors."""
+        """Return similarity between two frames (0–1; 1 = identical).
+
+        Uses 1 − normalised MSE so that small content changes on a
+        predominantly dark (Manim-style) background aren't hidden by
+        the background dominating a cosine dot-product.
+        """
         fa = a.astype(np.float32).ravel()
         fb = b.astype(np.float32).ravel()
-        denom = np.linalg.norm(fa) * np.linalg.norm(fb)
-        if denom == 0:
-            return 1.0
-        return float(np.dot(fa, fb) / denom)
+        mse = float(np.mean((fa - fb) ** 2))
+        # Normalise by the max possible squared difference (255**2)
+        return 1.0 - mse / 65025.0
 
     @staticmethod
     def _extract_video_frames(video_path: Path) -> list[dict[str, Any]]:
@@ -330,13 +334,17 @@ Generate a complete Manim script that:
             *frames,
         ]
 
-        structured_llm = self.review_llm.with_structured_output(VideoReview)
+        structured_llm = self.review_llm.with_structured_output(
+            VideoReview, include_raw=True
+        )
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=user_content),
         ]
 
-        review: VideoReview = structured_llm.invoke(messages)  # type: ignore[assignment]
+        result = structured_llm.invoke(messages)
+        review: VideoReview = result["parsed"]  # type: ignore[index]
+        self.last_review_usage = extract_llm_usage(result["raw"])  # type: ignore[index]
 
         if not review.has_issues:
             print("  Video review: APPROVED — no issues found.")
