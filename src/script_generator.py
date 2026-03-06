@@ -266,9 +266,22 @@ Generate a complete Manim script that:
         return 1.0 - mse / 65025.0
 
     @staticmethod
-    def _extract_video_frames(video_path: Path) -> list[dict[str, Any]]:
-        """Sample unique frames from a video and return them as LLM image_url parts.
+    def _format_timestamp(seconds: float) -> str:
+        """Format *seconds* as ``H:MM:SS`` or ``M:SS`` (no milliseconds)."""
+        total = int(seconds)
+        h, remainder = divmod(total, 3600)
+        m, s = divmod(remainder, 60)
+        if h:
+            return f"{h}:{m:02d}:{s:02d}"
+        return f"{m}:{s:02d}"
 
+    @staticmethod
+    def _extract_video_frames(
+        video_path: Path,
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Sample unique frames from a video.
+
+        Returns a list of ``(timestamp_label, image_url_part)`` tuples.
         Frames that are visually similar (>= _FRAME_SIMILARITY_THRESHOLD) to the
         previously kept frame are skipped so the model sees a diverse set.
         """
@@ -278,7 +291,7 @@ Generate a complete Manim script that:
             if duration <= 0:
                 return []
             interval = max(1.0, duration / _REVIEW_MAX_FRAMES)
-            parts: list[dict[str, Any]] = []
+            parts: list[tuple[str, dict[str, Any]]] = []
             last_frame: np.ndarray | None = None
             t = 0.0
             while t < duration:
@@ -296,11 +309,15 @@ Generate a complete Manim script that:
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
                 data = base64.b64encode(buf.getvalue()).decode()
+                label = f"Frame at {ManimScriptGenerator._format_timestamp(t)}"
                 parts.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{data}"},
-                    }
+                    (
+                        label,
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{data}"},
+                        },
+                    )
                 )
                 t += interval
             return parts
@@ -331,8 +348,10 @@ Generate a complete Manim script that:
 
         user_content: list[str | dict[str, Any]] = [
             {"type": "text", "text": review_text},
-            *frames,
         ]
+        for label, img_part in frames:
+            user_content.append({"type": "text", "text": label})
+            user_content.append(img_part)
 
         structured_llm = self.review_llm.with_structured_output(
             VideoReview, include_raw=True
@@ -362,7 +381,7 @@ Generate a complete Manim script that:
         self,
         script: str,
         failed_criteria: list[str],
-        frames: list[dict[str, Any]],
+        frames: list[tuple[str, dict[str, Any]]],
         topic: str,
     ) -> str:
         """Send the failed criteria + frames to the fix agent, then apply edits."""
@@ -377,8 +396,10 @@ Generate a complete Manim script that:
 
         user_content: list[str | dict[str, Any]] = [
             {"type": "text", "text": fix_text},
-            *frames,
         ]
+        for label, img_part in frames:
+            user_content.append({"type": "text", "text": label})
+            user_content.append(img_part)
 
         structured_fix_llm = self.fix_llm.with_structured_output(CodeFix)
         messages = [

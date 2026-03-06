@@ -121,6 +121,11 @@ class TestExtractVideoFrames:
         assert len(parts) > 1, (
             f"Only {len(parts)} frame(s) extracted from {len(frames)} distinct frames"
         )
+        # Each entry is (label, image_part)
+        for label, img_part in parts:
+            assert isinstance(label, str)
+            assert label.startswith("Frame at ")
+            assert img_part["type"] == "image_url"
 
     def test_identical_frames_deduplicated_to_one(self, monkeypatch):
         """If every sampled frame is identical, only 1 should be kept."""
@@ -141,6 +146,8 @@ class TestExtractVideoFrames:
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert len(parts) == 1
+        label, _ = parts[0]
+        assert label == "Frame at 0:00"
 
     def test_zero_duration_returns_empty(self, monkeypatch):
         class FakeClip:
@@ -155,6 +162,32 @@ class TestExtractVideoFrames:
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert parts == []
+
+
+# ---------------------------------------------------------------------------
+# _format_timestamp
+# ---------------------------------------------------------------------------
+
+
+class TestFormatTimestamp:
+    def test_zero(self):
+        assert ManimScriptGenerator._format_timestamp(0) == "0:00"
+
+    def test_seconds_only(self):
+        assert ManimScriptGenerator._format_timestamp(45) == "0:45"
+
+    def test_minutes_and_seconds(self):
+        assert ManimScriptGenerator._format_timestamp(125) == "2:05"
+
+    def test_hours(self):
+        assert ManimScriptGenerator._format_timestamp(3661) == "1:01:01"
+
+    def test_fractional_seconds_truncated(self):
+        assert ManimScriptGenerator._format_timestamp(90.7) == "1:30"
+
+    def test_no_milliseconds_in_output(self):
+        result = ManimScriptGenerator._format_timestamp(12.999)
+        assert "." not in result
 
 
 # ---------------------------------------------------------------------------
