@@ -315,12 +315,18 @@ Generate a complete Manim script that:
                 last_selected = chosen_t
 
             # ----------------------------------------------------------
-            # Pass 3 — fetch + encode only the selected frames
+            # Pass 3 — fetch + encode only the selected frames,
+            #           skipping any that are pixel-for-pixel identical
+            #           to the previously encoded frame.
             # ----------------------------------------------------------
             parts: list[tuple[str, dict[str, Any]]] = []
+            last_encoded: np.ndarray | None = None
             for chosen_t in selected_times:
-                frame = clip.get_frame(chosen_t)  # type: ignore[assignment]
-                img = Image.fromarray(frame)
+                frame: np.ndarray = clip.get_frame(chosen_t)  # type: ignore[assignment]
+                if last_encoded is not None and np.array_equal(last_encoded, frame):
+                    continue
+                last_encoded = frame
+                img = Image.fromarray(frame)  # type: ignore[arg-type]
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
                 data = base64.b64encode(buf.getvalue()).decode()
