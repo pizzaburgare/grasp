@@ -6,6 +6,7 @@ Uses OpenRouter to generate Manim code from lesson plans
 import base64
 import io
 import os
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -159,12 +160,14 @@ class ManimScriptGenerator:
         text = f"""Topic: {topic}
 
 Lesson Content:
+\"\"\"
 {lesson_content}
+\"\"\"
 
 Generate a complete Manim script that:
 1. Teaches this topic step-by-step with clear visuals
 2. Uses AudioManager for narration at each step
-3. Includes mathematical equations and geometric visualizations where appropriate
+3. Includes mathematical equations and geometric animations where appropriate
 4. Follows the exact pattern from the system prompt
 5. Is production-ready and can be directly executed by manim
 """
@@ -188,18 +191,18 @@ Generate a complete Manim script that:
         return self._clean_code_output(str(response.content))
 
     def _clean_code_output(self, code: str) -> str:
-        if code.startswith("```python"):
-            code = code[len("```python") :].strip()
-        elif code.startswith("```"):
-            code = code[3:].strip()
-        if code.endswith("```"):
-            code = code[:-3].strip()
+        code = code.strip()
+        # Extract the content of the first fenced code block if any.
+        # This handles leading preamble text, trailing commentary, and any
+        # amount of whitespace around the fences.
+        m = re.search(r"```(?:python)?\s*\n(.*?)\n?```", code, re.DOTALL)
+        if m:
+            code = m.group(1).strip()
         return self._sanitize_latex(code)
 
     @staticmethod
     def _sanitize_latex(code: str) -> str:
         """Escape bare LaTeX special chars inside Text() and Title() string args."""
-        import re
 
         # Match Text("...") or Title("...") — single or double quoted, non-greedy
         def _escape_arg(m: re.Match) -> str:
