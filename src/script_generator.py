@@ -28,8 +28,6 @@ load_dotenv()
 # Maximum number of video frames sent for review
 _REVIEW_MAX_FRAMES = 50
 _REVIEW_FRAME_QUALITY = 70
-# Visual similarity threshold for frame deduplication (0–1; 1 = identical)
-_FRAME_SIMILARITY_THRESHOLD = 0.95
 
 
 # ---------------------------------------------------------------------------
@@ -210,27 +208,7 @@ Generate a complete Manim script that:
             quote = m.group(2)  # " or '
             content = m.group(3)
 
-            # Escape & % # that aren't already escaped and aren't inside math ($...$)
-            # Only touch characters that are definitely outside math mode
-            def _escape_outside_math(s: str) -> str:
-                result = []
-                in_math = False
-                i = 0
-                while i < len(s):
-                    if s[i] == "$":
-                        in_math = not in_math
-                        result.append(s[i])
-                    elif not in_math and s[i] == "&" and (i == 0 or s[i - 1] != "\\"):
-                        result.append("\\&")
-                    elif not in_math and s[i] == "%" and (i == 0 or s[i - 1] != "\\"):
-                        result.append("\\%")
-                    else:
-                        result.append(s[i])
-                    i += 1
-                return "".join(result)
-
-            escaped = _escape_outside_math(content)
-            return f"{prefix}{quote}{escaped}{quote}"
+            return f"{prefix}{quote}{content}{quote}"
 
         pattern = re.compile(r'((?:Text|Title)\()(["\'])(.*?)\2', re.DOTALL)
         return pattern.sub(_escape_arg, code)
@@ -255,20 +233,6 @@ Generate a complete Manim script that:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
-        """Return similarity between two frames (0–1; 1 = identical).
-
-        Uses 1 − normalised MSE so that small content changes on a
-        predominantly dark (Manim-style) background aren't hidden by
-        the background dominating a cosine dot-product.
-        """
-        fa = a.astype(np.float32).ravel()
-        fb = b.astype(np.float32).ravel()
-        mse = float(np.mean((fa - fb) ** 2))
-        # Normalise by the max possible squared difference (255**2)
-        return 1.0 - mse / 65025.0
-
-    @staticmethod
     def _format_timestamp(seconds: float) -> str:
         """Format *seconds* as ``H:MM:SS`` or ``M:SS`` (no milliseconds)."""
         total = int(seconds)
@@ -285,8 +249,8 @@ Generate a complete Manim script that:
         """Sample unique frames from a video.
 
         Returns a list of ``(timestamp_label, image_url_part)`` tuples.
-        Frames that are visually similar (>= _FRAME_SIMILARITY_THRESHOLD) to the
-        previously kept frame are skipped so the model sees a diverse set.
+        Frames that are pixel-for-pixel identical to the previously kept frame
+        are skipped so the model sees a diverse set.
         """
         clip = VideoFileClip(str(video_path))
         try:
@@ -300,12 +264,10 @@ Generate a complete Manim script that:
             while t < duration:
                 frame: np.ndarray = clip.get_frame(t)  # type: ignore[assignment]
 
-                # Skip frames that are too similar to the previous kept frame
-                if last_frame is not None:
-                    sim = ManimScriptGenerator._frame_similarity(last_frame, frame)
-                    if sim >= _FRAME_SIMILARITY_THRESHOLD:
-                        t += interval
-                        continue
+                # Skip frames that are pixel-for-pixel identical to the previous kept frame
+                if last_frame is not None and np.array_equal(last_frame, frame):
+                    t += interval
+                    continue
 
                 last_frame = frame
                 img = Image.fromarray(frame)
