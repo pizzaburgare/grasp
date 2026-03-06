@@ -298,6 +298,10 @@ Generate a complete Manim script that:
     ) -> tuple[str, bool]:
         """Review the rendered video for visual issues using structured output.
 
+        Each frame is reviewed individually.  Only frames with issues are
+        forwarded to the fix agent, together with their specific failure
+        criteria.
+
         Returns ``(script, changed)``.  *changed* is ``False`` when the video
         passed review; otherwise *script* contains the corrected code.
         """
@@ -307,39 +311,69 @@ Generate a complete Manim script that:
             print("  Could not extract frames — skipping review.")
             return script, False
 
-        print(f"  Sending {len(frames)} unique frames for review ...")
-
-        review_text = f"Topic: {topic}\n\n{self.review_prompt_template}"
-
-        user_content: list[str | dict[str, Any]] = [
-            {"type": "text", "text": review_text},
-        ]
-        for label, img_part in frames:
-            user_content.append({"type": "text", "text": label})
-            user_content.append(img_part)
+        print(f"  Reviewing {len(frames)} unique frames one-by-one ...")
 
         structured_llm = self.review_llm.with_structured_output(
             VideoReview, include_raw=True
         )
-        messages = [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(content=user_content),
-        ]
+        review_text = f"Topic: {topic}\n\n{self.review_prompt_template}"
+        sys_msg = SystemMessage(content=self.system_prompt)
 
-        result = structured_llm.invoke(messages)
-        review: VideoReview = result["parsed"]  # type: ignore[index]
-        self.last_review_usage = extract_llm_usage(result["raw"])  # type: ignore[index]
+        # Collect frames that have issues
+        flagged: list[tuple[str, dict[str, Any], list[str]]] = []
+        total_usage = LLMUsage()
 
-        if not review.has_issues:
-            print("  Video review: APPROVED — no issues found.")
+        for i, (label, img_part) in enumerate(frames, 1):
+            user_content: list[str | dict[str, Any]] = [
+                {"type": "text", "text": review_text},
+                {"type": "text", "text": label},
+                img_part,
+            ]
+            result = structured_llm.invoke(
+                [sys_msg, HumanMessage(content=user_content)]
+            )
+            review: VideoReview = result["parsed"]  # type: ignore[index]
+            usage = extract_llm_usage(result["raw"])  # type: ignore[index]
+            total_usage = LLMUsage(
+                prompt_tokens=total_usage.prompt_tokens + usage.prompt_tokens,
+                completion_tokens=total_usage.completion_tokens
+                + usage.completion_tokens,
+                total_tokens=total_usage.total_tokens + usage.total_tokens,
+                cost_usd=(total_usage.cost_usd or 0) + (usage.cost_usd or 0) or None,
+            )
+
+            if review.has_issues:
+                failed = review.failed_criteria()
+                flagged.append((label, img_part, failed))
+                status = f"ISSUES ({', '.join(failed)})"
+            else:
+                status = "OK"
+            print(f"  [{i}/{len(frames)}] {label}: {status}")
+
+        self.last_review_usage = total_usage
+
+        if not flagged:
+            print("  Video review: APPROVED — no issues found in any frame.")
             return script, False
 
-        failed = review.failed_criteria()
-        print(f"  Video review: issues found — {len(failed)} criteria failed:")
-        for criterion in failed:
+        # Aggregate all unique failed criteria across flagged frames
+        all_failed: dict[str, None] = {}
+        for _, _, criteria in flagged:
+            for c in criteria:
+                all_failed[c] = None
+        all_failed_list = list(all_failed)
+
+        print(
+            f"  Video review: {len(flagged)}/{len(frames)} frames flagged, "
+            f"{len(all_failed_list)} unique criteria failed:"
+        )
+        for criterion in all_failed_list:
             print(f"    • {criterion}")
 
-        fixed_script = self._fix_visual_issues(script, failed, frames, topic)
+        flagged_frames = [(label, img_part) for label, img_part, _ in flagged]
+        fixed_script = self._fix_visual_issues(
+            script, all_failed_list, flagged_frames, topic
+        )
         return fixed_script, True
 
     def _fix_visual_issues(

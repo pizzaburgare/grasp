@@ -10,8 +10,10 @@ Navigate with ← / → arrow keys or the Prev / Next buttons.
 
 Usage:
     uv run manual_inspection/review_step.py path/to/video.mp4
+    uv run manual_inspection/review_step.py --review path/to/video.mp4
 """
 
+import argparse
 import base64
 import io
 import sys
@@ -23,31 +25,9 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.widgets import Button
 
-from src.script_generator import ManimScriptGenerator
+from src.script_generator import ManimScriptGenerator, VideoReview
 
 BG = "#0d0d0d"
-
-
-# ---------------------------------------------------------------------------
-# Frame extraction — delegates entirely to the production code
-# ---------------------------------------------------------------------------
-
-
-def extract_frames(video_path: Path) -> list[tuple[str, np.ndarray]]:
-    """Call the real agent extractor and decode the JPEG bytes back to numpy.
-
-    The numpy arrays represent exactly what the LLM would receive, including
-    any JPEG compression artefacts from _REVIEW_FRAME_QUALITY.
-    """
-    parts = ManimScriptGenerator._extract_video_frames(video_path)
-    frames: list[tuple[str, np.ndarray]] = []
-    for label, img_part in parts:
-        data_url: str = img_part["image_url"]["url"]
-        # data_url is  "data:image/jpeg;base64,<b64>"
-        b64 = data_url.split(",", 1)[1]
-        frame = np.array(Image.open(io.BytesIO(base64.b64decode(b64))))
-        frames.append((label, frame))
-    return frames
 
 
 # ---------------------------------------------------------------------------
@@ -74,13 +54,66 @@ def _global_ssim(a: np.ndarray, b: np.ndarray) -> float:
 
 
 # ---------------------------------------------------------------------------
+# LLM review — reuses the production review pipeline per-frame
+# ---------------------------------------------------------------------------
+
+
+def run_review(
+    raw_parts: list[tuple[str, dict]],
+    topic: str = "unknown",
+) -> list[VideoReview | None]:
+    """Run the real per-frame review LLM on each extracted frame.
+
+    Returns a list parallel to *raw_parts*: a ``VideoReview`` for every frame.
+    """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    gen = ManimScriptGenerator()
+
+    structured_llm = gen.review_llm.with_structured_output(
+        VideoReview, include_raw=True
+    )
+    review_text = f"Topic: {topic}\n\n{gen.review_prompt_template}"
+    sys_msg = SystemMessage(content=gen.system_prompt)
+
+    reviews: list[VideoReview | None] = []
+    for i, (label, img_part) in enumerate(raw_parts, 1):
+        user_content: list = [
+            {"type": "text", "text": review_text},
+            {"type": "text", "text": label},
+            img_part,
+        ]
+        try:
+            result = structured_llm.invoke(
+                [sys_msg, HumanMessage(content=user_content)]
+            )
+            review: VideoReview = result["parsed"]  # type: ignore[index]
+            reviews.append(review)
+            if review.has_issues:
+                status = f"ISSUES ({', '.join(review.failed_criteria())})"
+            else:
+                status = "OK"
+        except Exception as exc:
+            reviews.append(None)
+            status = f"ERROR ({exc})"
+        print(f"  [{i}/{len(raw_parts)}] {label}: {status}")
+
+    return reviews
+
+
+# ---------------------------------------------------------------------------
 # Interactive viewer
 # ---------------------------------------------------------------------------
 
 
 class FrameViewer:
-    def __init__(self, frames: list[tuple[str, np.ndarray]]) -> None:
+    def __init__(
+        self,
+        frames: list[tuple[str, np.ndarray]],
+        reviews: list[VideoReview | None] | None = None,
+    ) -> None:
         self.frames = frames
+        self.reviews = reviews
         self.n = len(frames)
         self.idx = 0
 
@@ -100,13 +133,14 @@ class FrameViewer:
     # ------------------------------------------------------------------
 
     def _build_ui(self) -> None:
+        has_reviews = self.reviews is not None
         self.fig = plt.figure(figsize=(20, 9), facecolor=BG)
         try:
             self.fig.canvas.manager.set_window_title("Frame Inspector")  # type: ignore[union-attr]
         except Exception:
             pass
 
-        # Three rows: header | images | controls
+        # Rows: header | images (+ optional review panel) | controls
         outer = gridspec.GridSpec(
             3,
             1,
@@ -135,18 +169,48 @@ class FrameViewer:
             fontfamily="monospace",
         )
 
-        # Side-by-side images
-        img_gs = gridspec.GridSpecFromSubplotSpec(
-            1,
-            2,
-            subplot_spec=outer[1],
-            wspace=0.03,
-        )
-        self.ax_prev = self.fig.add_subplot(img_gs[0])
-        self.ax_curr = self.fig.add_subplot(img_gs[1])
+        # Middle row: images + optional review panel
+        if has_reviews:
+            mid_gs = gridspec.GridSpecFromSubplotSpec(
+                1,
+                3,
+                subplot_spec=outer[1],
+                wspace=0.03,
+                width_ratios=[0.35, 0.35, 0.30],
+            )
+        else:
+            mid_gs = gridspec.GridSpecFromSubplotSpec(
+                1,
+                2,
+                subplot_spec=outer[1],
+                wspace=0.03,
+            )
+
+        self.ax_prev = self.fig.add_subplot(mid_gs[0])
+        self.ax_curr = self.fig.add_subplot(mid_gs[1])
         for ax in (self.ax_prev, self.ax_curr):
             ax.set_facecolor(BG)
             ax.axis("off")
+
+        # Review panel (only when --review)
+        self.ax_review = None
+        self.review_text_obj = None
+        if has_reviews:
+            self.ax_review = self.fig.add_subplot(mid_gs[2])
+            self.ax_review.set_facecolor("#1e1e2e")
+            self.ax_review.axis("off")
+            self.review_text_obj = self.ax_review.text(
+                0.05,
+                0.95,
+                "",
+                transform=self.ax_review.transAxes,
+                ha="left",
+                va="top",
+                fontsize=10,
+                color="#cdd6f4",
+                fontfamily="monospace",
+                wrap=True,
+            )
 
         # Controls row: [prev btn] [similarity bar] [next btn]
         ctrl_gs = gridspec.GridSpecFromSubplotSpec(
@@ -268,6 +332,22 @@ class FrameViewer:
             f"Frame Inspector  •  {self.idx + 1} of {self.n}  •  ← / → to navigate"
         )
 
+        # Review panel
+        if self.review_text_obj is not None and self.reviews is not None:
+            review = self.reviews[self.idx]
+            if review is None:
+                self.review_text_obj.set_text("Review: ERROR")
+                self.review_text_obj.set_color("#f38ba8")
+            elif review.has_issues:
+                lines = ["REVIEW: ISSUES FOUND\n"]
+                for criterion in review.failed_criteria():
+                    lines.append(f"  • {criterion}")
+                self.review_text_obj.set_text("\n".join(lines))
+                self.review_text_obj.set_color("#f38ba8")
+            else:
+                self.review_text_obj.set_text("REVIEW: OK\n\n  No issues detected.")
+                self.review_text_obj.set_color("#a6e3a1")
+
         self.fig.canvas.draw_idle()
 
 
@@ -277,23 +357,51 @@ class FrameViewer:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        print("Usage: uv run manual_inspection/review_step.py <video.mp4>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Inspect video frames (and optionally run the review LLM)."
+    )
+    parser.add_argument("video", type=Path, help="Path to the .mp4 video file.")
+    parser.add_argument(
+        "--review",
+        action="store_true",
+        help="Run the per-frame review LLM and display results.",
+    )
+    parser.add_argument(
+        "--topic",
+        default="unknown",
+        help="Topic string passed to the review prompt (default: 'unknown').",
+    )
+    args = parser.parse_args()
 
-    video_path = Path(sys.argv[1])
+    video_path: Path = args.video
     if not video_path.exists():
         print(f"Error: file not found: {video_path}")
         sys.exit(1)
 
     print(f"Extracting frames from: {video_path}")
-    frames = extract_frames(video_path)
-    if not frames:
+    raw_parts = ManimScriptGenerator._extract_video_frames(video_path)
+    if not raw_parts:
         print("No frames could be extracted.")
         sys.exit(1)
 
+    # Decode JPEG bytes to numpy for display
+    frames: list[tuple[str, np.ndarray]] = []
+    for label, img_part in raw_parts:
+        data_url: str = img_part["image_url"]["url"]
+        b64 = data_url.split(",", 1)[1]
+        frame = np.array(Image.open(io.BytesIO(base64.b64decode(b64))))
+        frames.append((label, frame))
+
     print(f"{len(frames)} unique frames extracted.")
-    FrameViewer(frames)
+
+    reviews: list[VideoReview | None] | None = None
+    if args.review:
+        print(f"Running review LLM on each frame (topic={args.topic!r}) ...")
+        reviews = run_review(raw_parts, topic=args.topic)
+        flagged = sum(1 for r in reviews if r is not None and r.has_issues)
+        print(f"Review complete: {flagged}/{len(reviews)} frames flagged.")
+
+    FrameViewer(frames, reviews=reviews)
 
 
 if __name__ == "__main__":
