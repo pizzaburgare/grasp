@@ -28,6 +28,8 @@ load_dotenv()
 # Maximum number of video frames sent for review
 _REVIEW_MAX_FRAMES = 50
 _REVIEW_FRAME_QUALITY = 70
+# Dense scan settings for scene-change detection
+_SCENE_SCAN_INTERVAL = 1  # seconds between scan samples
 
 
 # ---------------------------------------------------------------------------
@@ -246,35 +248,83 @@ Generate a complete Manim script that:
     def _extract_video_frames(
         video_path: Path,
     ) -> list[tuple[str, dict[str, Any]]]:
-        """Sample unique frames from a video.
+        """Sample frames from a video, preferring moments after animations settle.
 
         Returns a list of ``(timestamp_label, image_url_part)`` tuples.
-        Frames that are pixel-for-pixel identical to the previously kept frame
-        are skipped so the model sees a diverse set.
+
+        Algorithm:
+        1. Scan at ``_SCENE_SCAN_INTERVAL`` intervals, keeping only two frames
+           in memory at a time.  A sample is "settled" when it is
+           pixel-for-pixel identical to the *next* sample (i.e. the animation
+           has already finished and the scene is static going forward).
+        2. The video is divided into at most ``_REVIEW_MAX_FRAMES`` equal-width
+           buckets (each at least 1 s wide).  Within each bucket the *last*
+           settled sample is selected.  If none is settled, the last sample in
+           the bucket is used as a fallback.
+        3. A minimum 1 s gap between selected timestamps is enforced.
+        4. Only the chosen timestamps are fetched and JPEG-encoded.
         """
         clip = VideoFileClip(str(video_path))
         try:
             duration = float(clip.duration or 0.0)
             if duration <= 0:
                 return []
-            interval = max(1.0, duration / _REVIEW_MAX_FRAMES)
-            parts: list[tuple[str, dict[str, Any]]] = []
-            last_frame: np.ndarray | None = None
-            t = 0.0
-            while t < duration:
-                frame: np.ndarray = clip.get_frame(t)  # type: ignore[assignment]
 
-                # Skip frames that are pixel-for-pixel identical to the previous kept frame
-                if last_frame is not None and np.array_equal(last_frame, frame):
-                    t += interval
+            # ----------------------------------------------------------
+            # Pass 1 — scan: record (timestamp, is_settled)
+            #
+            # settled[T] = frame[T] == frame[T + interval]
+            # i.e. the scene is already static GOING FORWARD from T,
+            # so T is guaranteed to be post-animation, not mid-animation.
+            # Only two frames are kept in memory at a time.
+            # ----------------------------------------------------------
+            scan: list[tuple[float, bool]] = []  # (t, settled)
+            t = 0.0
+            curr_frame: np.ndarray = clip.get_frame(0.0)  # type: ignore[assignment]
+            while t < duration:
+                next_t = min(t + _SCENE_SCAN_INTERVAL, duration)
+                next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
+                scan.append((t, bool(np.array_equal(curr_frame, next_frame))))
+                curr_frame = next_frame
+                t = next_t
+            scan.append((t, False))  # last sample: no lookahead, mark unsettled
+
+            if not scan:
+                return []
+
+            # ----------------------------------------------------------
+            # Pass 2 — bucket selection
+            # ----------------------------------------------------------
+            bucket_size = max(1.0, duration / _REVIEW_MAX_FRAMES)
+            selected_times: list[float] = []
+            last_selected = -float("inf")
+
+            for b in range(_REVIEW_MAX_FRAMES):
+                b_start = b * bucket_size
+                b_end = min((b + 1) * bucket_size, duration)
+                bucket = [(ts, s) for ts, s in scan if b_start <= ts < b_end]
+                if not bucket:
                     continue
 
-                last_frame = frame
+                settled_ts = [ts for ts, s in bucket if s]
+                chosen_t = settled_ts[-1] if settled_ts else bucket[-1][0]
+
+                if chosen_t - last_selected < 1.0:
+                    continue
+                selected_times.append(chosen_t)
+                last_selected = chosen_t
+
+            # ----------------------------------------------------------
+            # Pass 3 — fetch + encode only the selected frames
+            # ----------------------------------------------------------
+            parts: list[tuple[str, dict[str, Any]]] = []
+            for chosen_t in selected_times:
+                frame = clip.get_frame(chosen_t)  # type: ignore[assignment]
                 img = Image.fromarray(frame)
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
                 data = base64.b64encode(buf.getvalue()).decode()
-                label = f"Frame at {ManimScriptGenerator._format_timestamp(t)}"
+                label = f"Frame at {ManimScriptGenerator._format_timestamp(chosen_t)}"
                 parts.append(
                     (
                         label,
@@ -284,7 +334,6 @@ Generate a complete Manim script that:
                         },
                     )
                 )
-                t += interval
             return parts
         finally:
             clip.close()
