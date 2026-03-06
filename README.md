@@ -91,22 +91,23 @@ uv run pyright                        # pyright only
 
 ```mermaid
 flowchart TD
-    A[Topic] --> B[1. Lesson Plan]
-    B --> C[2. Manim Script]
-    C --> R
+    A[Topic] --> B["1. Lesson Plan (LESSON_PLANNER_MODEL)"]
+    B --> C["2. Manim Script (MANIM_GENERATOR_MODEL)"]
+    C --> LOOP
 
-    subgraph LOOP["3. Iterate up to 3x at low quality"]
+    subgraph LOOP["3. Iterate up to MAX_SCRIPT_ITERATIONS at low quality"]
         R[Render] --> ERR{Error?}
-        ERR -- Yes --> FIX[LLM fixes script] --> R
-        ERR -- No --> REV{LLM approves?}
-        REV -- No --> UPD[LLM rewrites script] --> R
+        ERR -- Yes --> FIX_COMPILE["Fix agent applies search/replace edits"] --> R
+        ERR -- No --> REV["Review agent (structured output: 5 boolean criteria)"]
+        REV -- All pass --> DONE[Approved]
+        REV -- Any fail --> FIX_VISUAL["Fix agent receives failed criteria + frames"] --> R
     end
 
-    REV -- Yes --> OUT
+    DONE --> OUT
     LOOP --> OUT
 
     OUT{--final?}
-    OUT -- Yes --> HQ[High quality re-render]
+    OUT -- Yes --> HQ[High-quality re-render]
     OUT -- No --> V[Final Video]
     HQ --> V
 ```
