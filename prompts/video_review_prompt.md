@@ -1,4 +1,4 @@
-Examine the sampled frames from a Manim-rendered educational video and evaluate each criterion below. Respond with a structured object containing a boolean for each field — `true` if the problem is present, `false` if it is not. Look carefully at the image to see if you can identify a clear issue.
+Examine the sampled frames from a Manim-rendered educational video and evaluate each criterion below. Respond with a structured object containing a boolean for each field — `true` if the problem is present, `false` if it is not. Look carefully at the image to see if you can identify a clear issue. Remember that the frame might be from the middle of an animation, so some content may be in transition. This is especially true for text that is "being written out" or "partially animated". Focus on clear and obvious issues rather than minor or ambiguous ones. Overlaps and overflows are the most important ones.
 
 Criteria:
 - **text_clipped**: Are any text labels or equations clearly clipped or cut off at the frame edges?
