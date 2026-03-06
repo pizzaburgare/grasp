@@ -522,15 +522,30 @@ class CourseWorkflow:
 
         print("=" * 60)
         print("Starting AI Course Generation Pipeline")
-        print(f"Topic:        {topic}")
-        print(f"LLM model:    {self.model}")
-        print(f"TTS engine:   {tts_engine}")
+        print(f"Topic:          {topic}")
+        print(f"Planner model:  {self.model}")
+        print(f"Script model:   {self.manim_model}")
+        print(f"Review model:   {self.review_model}")
+        print(f"Fix model:      {self.script_generator.fix_model}")
+        print(f"TTS engine:     {tts_engine}")
         if input_dir:
-            print(f"Input dir:    {input_dir}")
-        print(f"Output dir:   {out}")
-        print(f"Cache dir:    {CACHE_DIR}")
-        print(f"Script hash:  {script_hash}")
-        print(f"Video hash:   {video_hash}")
+            try:
+                rel_input = Path(input_dir).relative_to(Path.cwd())
+            except ValueError:
+                rel_input = Path(input_dir)
+            print(f"Input dir:      {rel_input}")
+        try:
+            rel_out = out.relative_to(Path.cwd())
+        except ValueError:
+            rel_out = out
+        try:
+            rel_cache = Path(CACHE_DIR).relative_to(Path.cwd())
+        except ValueError:
+            rel_cache = Path(CACHE_DIR)
+        print(f"Output dir:     {rel_out}")
+        print(f"Cache dir:      {rel_cache}")
+        print(f"Script hash:    {script_hash}")
+        print(f"Video hash:     {video_hash}")
         print("=" * 60)
 
         # Fast path: nothing has changed — return the cached final video immediately
