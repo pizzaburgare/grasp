@@ -4,9 +4,11 @@
 
 **Lesson Structure:**
 
-1. **Quick Walkthrough:** * Provide a concise, intuitive explanation of what `<topic>` is.
+1. **Lesson Walkthrough:** * Provide a intuitive explanation of what `<topic>` is.
    * Explain the core concept in plain English, avoiding overly dense jargon where possible.
    * Tell the student *why* this concept exists or what it is fundamentally used for in this STEM field.
+   * Explain all the concepts one by one, with clear separations of them, and how they connect to each other. Use analogies if it helps clarify complex ideas.
+   * Explain how these problems might be visualized on a high level (we will use manim to create detailed visualizations later, but give a general idea of what the "shapes" of these problems look like and how they evolve as you solve them).
 
 2. **The Target Problem:** * Present a standard, exam-style problem that requires `<topic>` to solve.
    * Do not solve it yet. Just lay out the problem clearly so the student knows what a typical exam question looks like and what they are aiming to achieve.
