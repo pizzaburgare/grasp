@@ -1,14 +1,10 @@
-Below are sampled frames from a Manim-rendered educational video, followed by the Python source code that produced it.
+Examine the sampled frames from a Manim-rendered educational video and evaluate each criterion below. Respond with a structured object containing a boolean for each field — `true` if the problem is present, `false` if it is not.
 
-Check the video frames for ANY of these problems:
-  - Text or equations clipped / cut off at the edges
-  - Overlapping or unreadable content
-  - Broken or glitchy animations (artifacts, misplaced objects)
-  - Content overflowing outside the visible frame
-  - Missing or blank sections that should have content
-  - Incorrect visual representations of math concepts
+Criteria:
+- **text_clipped**: Are any text labels or equations clipped or cut off at the frame edges?
+- **overlapping_content**: Is any content overlapping or rendered unreadably on top of other content?
+- **broken_animations**: Are there any broken or glitchy visual artifacts, or misplaced objects?
+- **content_overflow**: Is any content overflowing / extending outside the visible frame boundary?
+- **latex_rendering**: Is any LaTeX incorrectly rendered (broken symbols, blank boxes, malformed equations)?
 
-If the video looks acceptable, respond with EXACTLY the string:
-"APPROVED"
-
-If there are problems, respond with the COMPLETE corrected Python script that fixes them. Output ONLY the code, no markdown fences, no explanations.
+Be strict: flag `true` for any criterion where you see even a single clear example.

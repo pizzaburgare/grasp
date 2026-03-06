@@ -110,13 +110,10 @@ class CourseWorkflow:
     def _build_script_context(self) -> dict[str, Any]:
         """Metadata that determines whether to regenerate the lesson plan + script.
 
-        Intentionally excludes render quality and TTS config so that switching
-        between low/high quality (or TTS engines) reuses the same script.
+        Intentionally excludes model names, render quality and TTS config so that
+        switching models (or TTS engines / quality) reuses the same cached script.
         """
         return {
-            "planner_model": self.model,
-            "manim_model": self.manim_model,
-            "review_model": self.review_model,
             "lesson_prompt": self._prompt_digest(self.lesson_prompt_template),
             "manim_prompt": self._prompt_digest(self.manim_prompt_template),
         }

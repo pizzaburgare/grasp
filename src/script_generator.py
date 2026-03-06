@@ -15,17 +15,84 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from moviepy import VideoFileClip
 from PIL import Image
-from pydantic import SecretStr
+from pydantic import BaseModel, Field, SecretStr
 
 from src.llm_metrics import LLMUsage, extract_llm_usage
-from src.paths import MANIM_PROMPT, VIDEO_REVIEW_PROMPT
-from src.settings import MANIM_GENERATOR_MODEL, VIDEO_REVIEW_MODEL
+from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
+from src.search_replace import flexible_search_and_replace
+from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
 
 load_dotenv()
 
 # Maximum number of video frames sent for review
 _REVIEW_MAX_FRAMES = 50
 _REVIEW_FRAME_QUALITY = 70
+# Visual similarity threshold for frame deduplication (0–1; 1 = identical)
+_FRAME_SIMILARITY_THRESHOLD = 0.95
+
+
+# ---------------------------------------------------------------------------
+# Structured output models
+# ---------------------------------------------------------------------------
+
+
+class VideoReview(BaseModel):
+    """Structured result from the video review agent."""
+
+    text_clipped: bool = Field(
+        description="Text or equations are clipped / cut off at the frame edges."
+    )
+    overlapping_content: bool = Field(
+        description="Content overlaps or is rendered unreadably on top of other content."
+    )
+    broken_animations: bool = Field(
+        description="Visual artifacts, glitches, or misplaced objects are visible."
+    )
+    content_overflow: bool = Field(
+        description="Content extends outside the visible frame boundary."
+    )
+    latex_rendering: bool = Field(
+        description="LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations)."
+    )
+
+    @property
+    def has_issues(self) -> bool:
+        return any(
+            [
+                self.text_clipped,
+                self.overlapping_content,
+                self.broken_animations,
+                self.content_overflow,
+                self.latex_rendering,
+            ]
+        )
+
+    def failed_criteria(self) -> list[str]:
+        labels = {
+            "text_clipped": "Text or equations clipped / cut off at the edges",
+            "overlapping_content": "Overlapping or unreadable content",
+            "broken_animations": "Broken or glitchy animations (artifacts, misplaced objects)",
+            "content_overflow": "Content overflowing outside the visible frame",
+            "latex_rendering": "Incorrect rendering of LaTeX",
+        }
+        return [desc for field, desc in labels.items() if getattr(self, field)]
+
+
+class CodeEdit(BaseModel):
+    """A single search/replace edit to apply to the script."""
+
+    old_code: str = Field(
+        description="Verbatim substring to find in the source (include 5+ lines of context)."
+    )
+    new_code: str = Field(description="Replacement text.")
+
+
+class CodeFix(BaseModel):
+    """Structured list of targeted edits from the fix agent."""
+
+    edits: list[CodeEdit] = Field(
+        description="Ordered list of search/replace edits to apply."
+    )
 
 
 class ManimScriptGenerator:
@@ -35,9 +102,11 @@ class ManimScriptGenerator:
         self,
         generation_model: str = MANIM_GENERATOR_MODEL,
         review_model: str = VIDEO_REVIEW_MODEL,
+        fix_model: str = VIDEO_FIX_MODEL,
     ):
         self.model = generation_model
         self.review_model = review_model
+        self.fix_model = fix_model
 
         self.llm = ChatOpenAI(
             model=generation_model,
@@ -60,11 +129,24 @@ class ManimScriptGenerator:
             },
         )
 
+        self.fix_llm = ChatOpenAI(
+            model=fix_model,
+            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "http://localhost",
+                "X-Title": "Manim Video Fixer",
+            },
+        )
+
         with open(MANIM_PROMPT) as f:
             self.system_prompt = f.read()
 
         with open(VIDEO_REVIEW_PROMPT) as f:
             self.review_prompt_template = f.read()
+
+        with open(VIDEO_FIX_PROMPT) as f:
+            self.fix_prompt = f.read()
 
         self.last_generation_usage: LLMUsage | None = None
 
@@ -170,19 +252,42 @@ Generate a complete Manim script that:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
+        """Return cosine similarity between two frames as flat float32 vectors."""
+        fa = a.astype(np.float32).ravel()
+        fb = b.astype(np.float32).ravel()
+        denom = np.linalg.norm(fa) * np.linalg.norm(fb)
+        if denom == 0:
+            return 1.0
+        return float(np.dot(fa, fb) / denom)
+
+    @staticmethod
     def _extract_video_frames(video_path: Path) -> list[dict[str, Any]]:
-        """Sample frames from a video and return them as LLM image_url parts."""
+        """Sample unique frames from a video and return them as LLM image_url parts.
+
+        Frames that are visually similar (>= _FRAME_SIMILARITY_THRESHOLD) to the
+        previously kept frame are skipped so the model sees a diverse set.
+        """
         clip = VideoFileClip(str(video_path))
         try:
             duration = float(clip.duration or 0.0)
             if duration <= 0:
                 return []
-            # Pick a frame interval that yields at most _REVIEW_MAX_FRAMES
             interval = max(1.0, duration / _REVIEW_MAX_FRAMES)
             parts: list[dict[str, Any]] = []
+            last_frame: np.ndarray | None = None
             t = 0.0
             while t < duration:
                 frame: np.ndarray = clip.get_frame(t)  # type: ignore[assignment]
+
+                # Skip frames that are too similar to the previous kept frame
+                if last_frame is not None:
+                    sim = ManimScriptGenerator._frame_similarity(last_frame, frame)
+                    if sim >= _FRAME_SIMILARITY_THRESHOLD:
+                        t += interval
+                        continue
+
+                last_frame = frame
                 img = Image.fromarray(frame)
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
@@ -190,9 +295,7 @@ Generate a complete Manim script that:
                 parts.append(
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{data}",
-                        },
+                        "image_url": {"url": f"data:image/jpeg;base64,{data}"},
                     }
                 )
                 t += interval
@@ -207,9 +310,9 @@ Generate a complete Manim script that:
         topic: str,
         lesson_content: str,
     ) -> tuple[str, bool]:
-        """Review the rendered video for visual issues.
+        """Review the rendered video for visual issues using structured output.
 
-        Returns ``(script, changed)``.  When *changed* is ``False`` the video
+        Returns ``(script, changed)``.  *changed* is ``False`` when the video
         passed review; otherwise *script* contains the corrected code.
         """
         print("Reviewing rendered video for visual issues ...")
@@ -218,33 +321,90 @@ Generate a complete Manim script that:
             print("  Could not extract frames — skipping review.")
             return script, False
 
-        review_text = (
-            f"Topic: {topic}\n\n"
-            + self.review_prompt_template
-            + f"\n\n--- SOURCE CODE ---\n```python\n{script}\n```"
-        )
+        print(f"  Sending {len(frames)} unique frames for review ...")
+
+        review_text = f"Topic: {topic}\n\n{self.review_prompt_template}"
 
         user_content: list[str | dict[str, Any]] = [
             {"type": "text", "text": review_text},
             *frames,
         ]
 
+        structured_llm = self.review_llm.with_structured_output(VideoReview)
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=user_content),
         ]
 
-        response = self.review_llm.invoke(messages)
-        self.last_review_usage = extract_llm_usage(response)
-        answer = str(response.content).strip()
+        review: VideoReview = structured_llm.invoke(messages)  # type: ignore[assignment]
 
-        if answer.upper().startswith("APPROVED"):
-            print("  Video review: APPROVED - no issues found.")
+        if not review.has_issues:
+            print("  Video review: APPROVED — no issues found.")
             return script, False
 
-        print("  Video review: issues found - regenerating script.")
-        new_script = self._clean_code_output(answer)
-        return new_script, True
+        failed = review.failed_criteria()
+        print(f"  Video review: issues found — {len(failed)} criteria failed:")
+        for criterion in failed:
+            print(f"    • {criterion}")
+
+        fixed_script = self._fix_visual_issues(script, failed, frames, topic)
+        return fixed_script, True
+
+    def _fix_visual_issues(
+        self,
+        script: str,
+        failed_criteria: list[str],
+        frames: list[dict[str, Any]],
+        topic: str,
+    ) -> str:
+        """Send the failed criteria + frames to the fix agent, then apply edits."""
+        print("  Sending to fix agent ...")
+
+        criteria_block = "\n".join(f"- {c}" for c in failed_criteria)
+        fix_text = (
+            f"Topic: {topic}\n\n"
+            f"The following visual criteria FAILED:\n{criteria_block}\n\n"
+            f"--- SOURCE CODE ---\n```python\n{script}\n```"
+        )
+
+        user_content: list[str | dict[str, Any]] = [
+            {"type": "text", "text": fix_text},
+            *frames,
+        ]
+
+        structured_fix_llm = self.fix_llm.with_structured_output(CodeFix)
+        messages = [
+            SystemMessage(content=self.fix_prompt),
+            HumanMessage(content=user_content),
+        ]
+
+        fix: CodeFix = structured_fix_llm.invoke(messages)  # type: ignore[assignment]
+
+        if not fix.edits:
+            print("  Fix agent returned no edits — returning original script.")
+            return script
+
+        # Ensure the original ends with a newline for dmp_lines_apply
+        result = script if script.endswith("\n") else script + "\n"
+        applied = 0
+        for edit in fix.edits:
+            search = (
+                edit.old_code if edit.old_code.endswith("\n") else edit.old_code + "\n"
+            )
+            replace = (
+                edit.new_code if edit.new_code.endswith("\n") else edit.new_code + "\n"
+            )
+            patched = flexible_search_and_replace((search, replace, result))
+            if patched is not None:
+                result = patched
+                applied += 1
+            else:
+                print(
+                    f"  Warning: edit could not be applied — skipping: {edit.old_code[:60]!r}"
+                )
+
+        print(f"  Applied {applied}/{len(fix.edits)} edits from fix agent.")
+        return self._clean_code_output(result)
 
     def fix_compilation_error(
         self,
