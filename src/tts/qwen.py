@@ -10,6 +10,7 @@ from .base import TTSEngine
 # Default reference audio bundled alongside this file (used for voice cloning
 # when QWEN_TTS_REF_AUDIO is not set and the model type is 'base').
 _BUNDLED_REF_AUDIO = str(Path(__file__).parent / "clone.wav")
+_BUNDLED_REF_TEXT = str(Path(__file__).parent / "clone.txt")
 
 # Suppress verbose logging from qwen_tts and its transformers dependency
 logging.getLogger("qwen_tts").setLevel(logging.WARNING)
@@ -85,6 +86,7 @@ class QwenTTSEngine(TTSEngine):
                 text=text,
                 language=self.language,
                 speaker=self.speaker,
+                temperature=0.7,
             )
         elif model_type == "base":
             if not self.ref_audio:
