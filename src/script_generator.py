@@ -29,7 +29,26 @@ load_dotenv()
 _REVIEW_MAX_FRAMES = 50
 _REVIEW_FRAME_QUALITY = 70
 # Dense scan settings for scene-change detection
-_SCENE_SCAN_INTERVAL = 1  # seconds between scan samples
+_SCENE_SCAN_INTERVAL = 0.5  # seconds between scan samples
+
+
+# ---------------------------------------------------------------------------
+# Image similarity
+# ---------------------------------------------------------------------------
+
+
+def _frame_ssim(a: np.ndarray, b: np.ndarray) -> float:
+    """Compute global SSIM on BT.601 luma.  Returns a value in [-1, 1]."""
+    C1 = (0.01 * 255) ** 2
+    C2 = (0.03 * 255) ** 2
+    ga = np.dot(a[..., :3].astype(np.float64), [0.299, 0.587, 0.114])
+    gb = np.dot(b[..., :3].astype(np.float64), [0.299, 0.587, 0.114])
+    mu_a, mu_b = ga.mean(), gb.mean()
+    var_a, var_b = ga.var(), gb.var()
+    cov = float(np.mean((ga - mu_a) * (gb - mu_b)))
+    num = (2 * mu_a * mu_b + C1) * (2 * cov + C2)
+    den = (mu_a**2 + mu_b**2 + C1) * (var_a + var_b + C2)
+    return float(np.clip(num / den, -1.0, 1.0))
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +73,10 @@ class VideoReview(BaseModel):
     )
     latex_rendering: bool = Field(
         description="LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations)."
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        description="Optional 4-8 word description of the problem(s) found. Only set when at least one criterion is true.",
     )
 
     @property
@@ -259,8 +282,8 @@ Generate a complete Manim script that:
            has already finished and the scene is static going forward).
         2. The video is divided into at most ``_REVIEW_MAX_FRAMES`` equal-width
            buckets (each at least 1 s wide).  Within each bucket the *last*
-           settled sample is selected.  If none is settled, the last sample in
-           the bucket is used as a fallback.
+           settled sample is selected.  Buckets with no settled sample are
+           skipped entirely — only genuinely static frames are kept.
         3. A minimum 1 s gap between selected timestamps is enforced.
         4. Only the chosen timestamps are fetched and JPEG-encoded.
         """
@@ -307,7 +330,9 @@ Generate a complete Manim script that:
                     continue
 
                 settled_ts = [ts for ts, s in bucket if s]
-                chosen_t = settled_ts[-1] if settled_ts else bucket[-1][0]
+                if not settled_ts:
+                    continue
+                chosen_t = settled_ts[-1]
 
                 if chosen_t - last_selected < 1.0:
                     continue
@@ -316,14 +341,17 @@ Generate a complete Manim script that:
 
             # ----------------------------------------------------------
             # Pass 3 — fetch + encode only the selected frames,
-            #           skipping any that are pixel-for-pixel identical
-            #           to the previously encoded frame.
+            #           skipping any that are ≥99% similar (SSIM) to
+            #           the previously kept frame, and skipping
+            #           near-uniform frames (e.g. fully black).
             # ----------------------------------------------------------
             parts: list[tuple[str, dict[str, Any]]] = []
             last_encoded: np.ndarray | None = None
             for chosen_t in selected_times:
                 frame: np.ndarray = clip.get_frame(chosen_t)  # type: ignore[assignment]
-                if last_encoded is not None and np.array_equal(last_encoded, frame):
+                if float(np.std(frame)) < 2.0:
+                    continue
+                if last_encoded is not None and _frame_ssim(last_encoded, frame) >= 0.99:
                     continue
                 last_encoded = frame
                 img = Image.fromarray(frame)  # type: ignore[arg-type]
@@ -375,7 +403,7 @@ Generate a complete Manim script that:
         sys_msg = SystemMessage(content=self.system_prompt)
 
         # Collect frames that have issues
-        flagged: list[tuple[str, dict[str, Any], list[str]]] = []
+        flagged: list[tuple[str, dict[str, Any], list[str], str | None]] = []
         total_usage = LLMUsage()
 
         for i, (label, img_part) in enumerate(frames, 1):
@@ -399,7 +427,7 @@ Generate a complete Manim script that:
 
             if review.has_issues:
                 failed = review.failed_criteria()
-                flagged.append((label, img_part, failed))
+                flagged.append((label, img_part, failed, review.notes))
                 status = f"ISSUES ({', '.join(failed)})"
             else:
                 status = "OK"
@@ -413,7 +441,7 @@ Generate a complete Manim script that:
 
         # Aggregate all unique failed criteria across flagged frames
         all_failed: dict[str, None] = {}
-        for _, _, criteria in flagged:
+        for _, _, criteria, _ in flagged:
             for c in criteria:
                 all_failed[c] = None
         all_failed_list = list(all_failed)
@@ -423,9 +451,11 @@ Generate a complete Manim script that:
             f"{len(all_failed_list)} unique criteria failed:"
         )
         for criterion in all_failed_list:
-            print(f"    • {criterion}")
+            print(f"    \u2022 {criterion}")
 
-        flagged_frames = [(label, img_part) for label, img_part, _ in flagged]
+        flagged_frames = [
+            (label, img_part, notes) for label, img_part, _, notes in flagged
+        ]
         fixed_script = self._fix_visual_issues(
             script, all_failed_list, flagged_frames, topic
         )
@@ -435,7 +465,7 @@ Generate a complete Manim script that:
         self,
         script: str,
         failed_criteria: list[str],
-        frames: list[tuple[str, dict[str, Any]]],
+        frames: list[tuple[str, dict[str, Any], str | None]],
         topic: str,
     ) -> str:
         """Send the failed criteria + frames to the fix agent, then apply edits."""
@@ -451,8 +481,9 @@ Generate a complete Manim script that:
         user_content: list[str | dict[str, Any]] = [
             {"type": "text", "text": fix_text},
         ]
-        for label, img_part in frames:
-            user_content.append({"type": "text", "text": label})
+        for label, img_part, notes in frames:
+            annotation = f"{label}" + (f" — {notes}" if notes else "")
+            user_content.append({"type": "text", "text": annotation})
             user_content.append(img_part)
 
         structured_fix_llm = self.fix_llm.with_structured_output(CodeFix)

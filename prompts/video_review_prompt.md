@@ -8,3 +8,5 @@ Criteria:
 - **latex_rendering**: Is any LaTeX incorrectly rendered (broken symbols, blank boxes, malformed equations)?
 
 Be strict: flag `true` for any criterion where you see even a clear example.
+
+If any criterion is `true`, also set `notes` to a brief 2-5 word description of the specific problem you observed (e.g. "equation cut off left edge", "two labels overlap top-right"). Leave `notes` empty if everything looks fine.
