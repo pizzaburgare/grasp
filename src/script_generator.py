@@ -25,11 +25,14 @@ from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MO
 
 load_dotenv()
 
-# Maximum number of video frames sent for review
-_REVIEW_MAX_FRAMES = 50
+# Target number of video frames sent for review
+_REVIEW_TARGET_FRAMES = 50
 _REVIEW_FRAME_QUALITY = 70
 # Dense scan settings for scene-change detection
 _SCENE_SCAN_INTERVAL = 0.5  # seconds between scan samples
+_SCENE_SETTLE_THRESHOLD = (
+    0.01  # max mean absolute pixel difference to count as "settled"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -268,24 +271,21 @@ Generate a complete Manim script that:
         return f"{m}:{s:02d}"
 
     @staticmethod
-    def _extract_video_frames(
+    def _scan_settled_frames(
         video_path: Path,
-    ) -> list[tuple[str, dict[str, Any]]]:
-        """Sample frames from a video, preferring moments after animations settle.
+    ) -> list[tuple[float, np.ndarray]]:
+        """Scan a video and return all settled, non-blank frames with ≥ 1 s gap.
 
-        Returns a list of ``(timestamp_label, image_url_part)`` tuples.
+        A frame at time *T* is "settled" when its mean absolute pixel
+        difference from the frame at *T + _SCENE_SCAN_INTERVAL* is below
+        ``_SCENE_SETTLE_THRESHOLD``.  This tolerates tiny codec rounding
+        artifacts that prevent perfect pixel equality.
 
-        Algorithm:
-        1. Scan at ``_SCENE_SCAN_INTERVAL`` intervals, keeping only two frames
-           in memory at a time.  A sample is "settled" when it is
-           pixel-for-pixel identical to the *next* sample (i.e. the animation
-           has already finished and the scene is static going forward).
-        2. The video is divided into at most ``_REVIEW_MAX_FRAMES`` equal-width
-           buckets (each at least 1 s wide).  Within each bucket the *last*
-           settled sample is selected.  Buckets with no settled sample are
-           skipped entirely — only genuinely static frames are kept.
-        3. A minimum 1 s gap between selected timestamps is enforced.
-        4. Only the chosen timestamps are fetched and JPEG-encoded.
+        Near-uniform frames (std < 2) are skipped, and a minimum 1 s gap
+        between kept frames is enforced.
+
+        Returns a list of ``(timestamp, frame_array)`` tuples.  The caller
+        owns the numpy arrays (they are copies, not views into the clip).
         """
         clip = VideoFileClip(str(video_path))
         try:
@@ -293,84 +293,97 @@ Generate a complete Manim script that:
             if duration <= 0:
                 return []
 
-            # ----------------------------------------------------------
-            # Pass 1 — scan: record (timestamp, is_settled)
-            #
-            # settled[T] = frame[T] == frame[T + interval]
-            # i.e. the scene is already static GOING FORWARD from T,
-            # so T is guaranteed to be post-animation, not mid-animation.
-            # Only two frames are kept in memory at a time.
-            # ----------------------------------------------------------
-            scan: list[tuple[float, bool]] = []  # (t, settled)
+            candidates: list[tuple[float, np.ndarray]] = []
+            last_kept_t = -float("inf")
+
             t = 0.0
             curr_frame: np.ndarray = clip.get_frame(0.0)  # type: ignore[assignment]
             while t < duration:
                 next_t = min(t + _SCENE_SCAN_INTERVAL, duration)
                 next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
-                scan.append((t, bool(np.array_equal(curr_frame, next_frame))))
-                curr_frame = next_frame
-                t = next_t
-            scan.append((t, False))  # last sample: no lookahead, mark unsettled
 
-            if not scan:
-                return []
-
-            # ----------------------------------------------------------
-            # Pass 2 — bucket selection
-            # ----------------------------------------------------------
-            bucket_size = max(1.0, duration / _REVIEW_MAX_FRAMES)
-            selected_times: list[float] = []
-            last_selected = -float("inf")
-
-            for b in range(_REVIEW_MAX_FRAMES):
-                b_start = b * bucket_size
-                b_end = min((b + 1) * bucket_size, duration)
-                bucket = [(ts, s) for ts, s in scan if b_start <= ts < b_end]
-                if not bucket:
-                    continue
-
-                settled_ts = [ts for ts, s in bucket if s]
-                if not settled_ts:
-                    continue
-                chosen_t = settled_ts[-1]
-
-                if chosen_t - last_selected < 1.0:
-                    continue
-                selected_times.append(chosen_t)
-                last_selected = chosen_t
-
-            # ----------------------------------------------------------
-            # Pass 3 — fetch + encode only the selected frames,
-            #           skipping any that are ≥99% similar (SSIM) to
-            #           the previously kept frame, and skipping
-            #           near-uniform frames (e.g. fully black).
-            # ----------------------------------------------------------
-            parts: list[tuple[str, dict[str, Any]]] = []
-            last_encoded: np.ndarray | None = None
-            for chosen_t in selected_times:
-                frame: np.ndarray = clip.get_frame(chosen_t)  # type: ignore[assignment]
-                if float(np.std(frame)) < 2.0:
-                    continue
-                if last_encoded is not None and _frame_ssim(last_encoded, frame) >= 0.99:
-                    continue
-                last_encoded = frame
-                img = Image.fromarray(frame)  # type: ignore[arg-type]
-                buf = io.BytesIO()
-                img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
-                data = base64.b64encode(buf.getvalue()).decode()
-                label = f"Frame at {ManimScriptGenerator._format_timestamp(chosen_t)}"
-                parts.append(
-                    (
-                        label,
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{data}"},
-                        },
+                mae = float(
+                    np.mean(
+                        np.abs(
+                            curr_frame.astype(np.int16) - next_frame.astype(np.int16)
+                        )
                     )
                 )
-            return parts
+                if mae <= _SCENE_SETTLE_THRESHOLD:  # settled
+                    if t - last_kept_t >= 1.0:  # 1 s gap
+                        if float(np.std(curr_frame)) >= 2.0:  # not blank
+                            candidates.append((t, curr_frame.copy()))
+                            last_kept_t = t
+
+                curr_frame = next_frame
+                t = next_t
+
+            return candidates
         finally:
             clip.close()
+
+    @staticmethod
+    def _extract_video_frames(
+        video_path: Path,
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Sample frames from a video, preferring moments after animations settle.
+
+        Returns a list of ``(timestamp_label, image_url_part)`` tuples, targeting
+        up to ``_REVIEW_TARGET_FRAMES`` frames.
+
+        Algorithm:
+        1. ``_scan_settled_frames`` collects all settled, non-blank frames
+           with ≥ 1 s gap (single sequential scan, MAE-based settle check).
+        2. SSIM-dedup the full candidate set (threshold 0.99): walk sequentially,
+           skip any frame with SSIM ≥ 0.99 vs. the previous kept frame.
+        3. Evenly subsample to at most ``_REVIEW_TARGET_FRAMES``.
+        4. JPEG-encode the final frames.
+        """
+        candidates = ManimScriptGenerator._scan_settled_frames(video_path)
+        if not candidates:
+            return []
+
+        # ----------------------------------------------------------
+        # SSIM dedup (sequential, 0.99 threshold)
+        # ----------------------------------------------------------
+        deduped: list[tuple[float, np.ndarray]] = [candidates[0]]
+        for ts, frame in candidates[1:]:
+            if _frame_ssim(deduped[-1][1], frame) < 0.99:
+                deduped.append((ts, frame))
+
+        # ----------------------------------------------------------
+        # Evenly subsample to target
+        # ----------------------------------------------------------
+        if len(deduped) > _REVIEW_TARGET_FRAMES:
+            step = len(deduped) / _REVIEW_TARGET_FRAMES
+            indices = list(
+                dict.fromkeys(
+                    min(round(i * step), len(deduped) - 1)
+                    for i in range(_REVIEW_TARGET_FRAMES)
+                )
+            )
+            deduped = [deduped[i] for i in indices]
+
+        # ----------------------------------------------------------
+        # JPEG-encode the final frames
+        # ----------------------------------------------------------
+        parts: list[tuple[str, dict[str, Any]]] = []
+        for chosen_t, frame in deduped:
+            img = Image.fromarray(frame)  # type: ignore[arg-type]
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
+            data = base64.b64encode(buf.getvalue()).decode()
+            label = f"Frame at {ManimScriptGenerator._format_timestamp(chosen_t)}"
+            parts.append(
+                (
+                    label,
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{data}"},
+                    },
+                )
+            )
+        return parts
 
     def review_video(
         self,

@@ -129,7 +129,10 @@ class TestExtractVideoFrames:
 
     def test_identical_frames_deduplicated_to_one(self, monkeypatch):
         """If every sampled frame is identical, only 1 should be kept."""
+        # Non-black so it passes the std < 2 filter; SSIM=1.0 between identical
+        # frames so all but the first are deduplicated.
         frame = np.zeros((120, 160, 3), dtype=np.uint8)
+        frame[40:80, 60:100] = 200  # bright rectangle, std well above 2
 
         class FakeClip:
             def __init__(self, path):

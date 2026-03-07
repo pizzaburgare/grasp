@@ -11,6 +11,7 @@ Navigate with ← / → arrow keys or the Prev / Next buttons.
 Usage:
     uv run manual_inspection/review_step.py path/to/video.mp4
     uv run manual_inspection/review_step.py --review path/to/video.mp4
+    uv run manual_inspection/review_step.py --all-stills path/to/video.mp4
 """
 
 import argparse
@@ -367,6 +368,11 @@ def main() -> None:
         help="Run the per-frame review LLM and display results.",
     )
     parser.add_argument(
+        "--all-stills",
+        action="store_true",
+        help="Show every settled non-blank frame (>=1s gap). No SSIM dedup or target limit.",
+    )
+    parser.add_argument(
         "--topic",
         default="unknown",
         help="Topic string passed to the review prompt (default: 'unknown').",
@@ -377,6 +383,19 @@ def main() -> None:
     if not video_path.exists():
         print(f"Error: file not found: {video_path}")
         sys.exit(1)
+
+    if args.all_stills:
+        print(f"Extracting ALL still frames from: {video_path}")
+        raw = ManimScriptGenerator._scan_settled_frames(video_path)
+        if not raw:
+            print("No still frames found.")
+            sys.exit(1)
+        frames = [
+            (f"Frame at {ManimScriptGenerator._format_timestamp(t)}", f) for t, f in raw
+        ]
+        print(f"{len(frames)} still frames found (no SSIM dedup, no target limit).")
+        FrameViewer(frames)
+        return
 
     print(f"Extracting frames from: {video_path}")
     raw_parts = ManimScriptGenerator._extract_video_frames(video_path)
