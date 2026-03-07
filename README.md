@@ -1,8 +1,45 @@
-# AI Courses
+# Grasp
 
-Automated pipeline for generating educational math videos using AI and Manim. Provide a topic, and the system generates a lesson plan, writes a Manim animation script, renders it with synchronized TTS narration, and self-corrects visual issues — all in one command.
+**Turn any university course into short, animated video lessons — automatically.**
 
-## Prerequisites
+## Problem Statement
+
+University is broken for most students.
+
+- **One teacher for 200 students.** Lectures move at one speed — too fast for some, too slow for others. There's no way to personalize at scale.
+- **Disengaged teaching.** Many lecturers would rather do research. The result: recycled 10-year-old slides and labs, and feedback that goes nowhere.
+- **Canvas is a mess.** No standards for course structure. Students are buried under hundreds of slide pages and 1,000+ page textbooks.
+
+Overall, students waste enormous amounts of time — and it doesn't have to be this way.
+
+## Solution
+
+Grasp takes raw course materials and transforms them into concise, animated explainer videos optimized for learning and exam results.
+
+1. **Upload** all course materials — slides, exams, labs, textbooks.
+2. **AI analysis** — a data pipeline processes each file type and an AI agent analyzes the content to create a structured learning plan.
+3. **Animated video** — a Python animation script is generated and rendered using Manim.
+4. **AI review loop** — a second AI agent reviews the rendered video, requesting fixes until quality criteria pass.
+5. **Voice synthesis** — narration is generated via TTS and merged with the animation.
+
+The result: a 57-minute lecture becomes a 15-minute Grasp video. Same concepts, 75% shorter, optimized for retention.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Language** | Python 3.13 |
+| **LLM orchestration** | LangChain, LangGraph |
+| **LLM provider** | OpenRouter (Gemini, Claude, etc.) |
+| **Animation** | Manim Community Edition |
+| **TTS engines** | Kokoro, Qwen TTS, Piper |
+| **Video processing** | FFmpeg, MoviePy |
+| **Math rendering** | LaTeX |
+| **Package manager** | uv |
+
+## How to Run
+
+### Prerequisites
 
 Install the following before setting up the project:
 
