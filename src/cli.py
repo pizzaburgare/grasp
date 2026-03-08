@@ -59,6 +59,11 @@ def main() -> None:
         action="store_true",
         help="Render at high quality (-qh) instead of low quality (-ql)",
     )
+    parser.add_argument(
+        "--skip-review",
+        action="store_true",
+        help="Skip the LLM video-review loop and go straight to the final render",
+    )
 
     args = parser.parse_args()
 
@@ -68,4 +73,5 @@ def main() -> None:
         input_dir=args.input_dir,
         output_dir=args.output_dir,
         final_quality=args.final,
+        skip_review=args.skip_review,
     )

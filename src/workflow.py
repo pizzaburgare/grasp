@@ -492,6 +492,7 @@ class CourseWorkflow:
         input_dir: Optional[str] = None,
         output_dir: str = "output",
         final_quality: bool = False,
+        skip_review: bool = False,
     ) -> dict:
         import shutil
 
@@ -698,8 +699,8 @@ class CourseWorkflow:
                 continue  # retry render
 
             # Render succeeded — ask the LLM to review the video
-            if iteration >= max_iters - 1:
-                break  # last iteration, skip review
+            if skip_review or iteration >= max_iters - 1:
+                break  # review disabled or last iteration
 
             current_script = script_path.read_text()
             new_script, changed = self.script_generator.review_video(
