@@ -28,7 +28,7 @@ def _text_parts(parts):
 
 
 # ===========================================================================
-# process_input_dir  — PDF handling
+# process_input_dir  - PDF handling
 # ===========================================================================
 
 
@@ -102,7 +102,7 @@ class TestProcessInputDirPdf:
 
 
 # ===========================================================================
-# process_input_dir  — mixed file types
+# process_input_dir  - mixed file types
 # ===========================================================================
 
 
@@ -153,7 +153,7 @@ class TestProcessInputDirMixed:
 
 
 # ===========================================================================
-# generate_lesson_plan  — file listing output
+# generate_lesson_plan  - file listing output
 # ===========================================================================
 
 

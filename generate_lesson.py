@@ -1,5 +1,5 @@
 """
-generate_lesson.py — AI Course Lesson Generator
+generate_lesson.py - AI Course Lesson Generator
 
 Usage:
   uv run lesson "LU Decomposition"

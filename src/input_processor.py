@@ -157,7 +157,7 @@ def process_input_dir(
         elif ext in PDF_EXTENSIONS:
             page_uris = extract_pdf_pages(file)
             parts.append(
-                {"type": "text", "text": f"[PDF: {rel} — {len(page_uris)} page(s)]"}
+                {"type": "text", "text": f"[PDF: {rel} - {len(page_uris)} page(s)]"}
             )
             for uri in page_uris:
                 parts.append({"type": "image_url", "image_url": {"url": uri}})
@@ -173,7 +173,7 @@ def process_input_dir(
             parts.append(
                 {
                     "type": "text",
-                    "text": f"[Video: {rel}] — {len(frame_uris)} frames sampled at 1 fps.",
+                    "text": f"[Video: {rel}] - {len(frame_uris)} frames sampled at 1 fps.",
                 }
             )
             for uri in frame_uris:

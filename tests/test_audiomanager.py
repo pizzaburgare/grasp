@@ -34,7 +34,7 @@ def _make_mock_engine(audio=None, sr: int = SAMPLE_RATE):
 
 
 # ---------------------------------------------------------------------------
-# Unit tests — no model download, no patching needed
+# Unit tests - no model download, no patching needed
 # ---------------------------------------------------------------------------
 
 

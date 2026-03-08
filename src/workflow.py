@@ -121,7 +121,7 @@ class CourseWorkflow:
     def _build_cache_context(
         self, tts_engine: str, final_quality: bool
     ) -> dict[str, Any]:
-        """Full metadata including render settings — determines video cache validity."""
+        """Full metadata including render settings - determines video cache validity."""
         return {
             **self._build_script_context(),
             "quality": "high" if final_quality else "low",
@@ -140,7 +140,7 @@ class CourseWorkflow:
         skipped: bool = False,
     ) -> None:
         if skipped:
-            print(f"{label}: cache hit — OpenRouter call skipped.")
+            print(f"{label}: cache hit - OpenRouter call skipped.")
             return
 
         if usage is None:
@@ -228,7 +228,7 @@ class CourseWorkflow:
             for f in input_files:
                 print(f"    - {f}")
         else:
-            print("  No input files — using topic name only")
+            print("  No input files - using topic name only")
         print(f"Using model: {self.model}")
 
         system_content = self.lesson_prompt_template.replace("<topic>", topic)
@@ -417,7 +417,7 @@ class CourseWorkflow:
                 tail = "\n".join(combined.splitlines()[-30:])
                 print("Manim error output (last 30 lines):")
                 print(tail)
-            raise RuntimeError("Manim render failed — check output above.")
+            raise RuntimeError("Manim render failed - check output above.")
 
         # Find the rendered mp4 (exclude partial movie files)
         # Sort by modification time and take the most recent to handle persistent cache
@@ -437,7 +437,7 @@ class CourseWorkflow:
         final_path = output_dir / f"{topic_slug}.mp4"
 
         if not merged_audio.exists():
-            print("No merged_audio.wav found — copying video without audio")
+            print("No merged_audio.wav found - copying video without audio")
             _shutil.copy2(video_path, final_path)
         else:
             print("Merging audio into video ...")
@@ -476,7 +476,7 @@ class CourseWorkflow:
                 f"Video cached: {get_lesson_cache_dir(lesson_name) / 'video' / f'{context_hash}.mp4'}"
             )
 
-        # Clean up working audio files — hash-named cache files are preserved
+        # Clean up working audio files - hash-named cache files are preserved
         if audio_work_dir != audio_cache_dir:
             _shutil.rmtree(audio_work_dir, ignore_errors=True)
 
@@ -510,7 +510,7 @@ class CourseWorkflow:
             input_dir,
             extra_context=self._build_script_context(),
         )
-        # video_hash additionally encodes quality + TTS — keys the final video cache
+        # video_hash additionally encodes quality + TTS - keys the final video cache
         video_hash = hash_context(
             topic,
             input_dir,
@@ -549,18 +549,18 @@ class CourseWorkflow:
         print(f"Video hash:     {video_hash}")
         print("=" * 60)
 
-        # Fast path: nothing has changed — return the cached final video immediately
+        # Fast path: nothing has changed - return the cached final video immediately
         cached_video = get_cached_video(slug, video_hash)
         if cached_video:
             usage_steps.extend(
                 [
-                    ("Step 1 — Lesson planning", LLMUsage(), True),
-                    ("Step 2 — Script generation", LLMUsage(), True),
+                    ("Step 1 - Lesson planning", LLMUsage(), True),
+                    ("Step 2 - Script generation", LLMUsage(), True),
                 ]
             )
             print()
             print("=" * 60)
-            print("Nothing has changed — all assets already cached.")
+            print("Nothing has changed - all assets already cached.")
             print(f"  script : .cache/{slug}/script/{script_hash}.py")
             print(f"  video  : .cache/{slug}/video/{video_hash}.mp4")
             print("=" * 60)
@@ -603,17 +603,17 @@ class CourseWorkflow:
             lesson = lesson_plan_path.read_text() if lesson_plan_path.exists() else ""
             usage_steps.extend(
                 [
-                    ("Step 1 — Lesson planning", LLMUsage(), True),
-                    ("Step 2 — Script generation", LLMUsage(), True),
+                    ("Step 1 - Lesson planning", LLMUsage(), True),
+                    ("Step 2 - Script generation", LLMUsage(), True),
                 ]
             )
             self._print_openrouter_step(
-                "Step 1 — Lesson planning",
+                "Step 1 - Lesson planning",
                 usage=None,
                 skipped=True,
             )
             self._print_openrouter_step(
-                "Step 2 — Script generation",
+                "Step 2 - Script generation",
                 usage=None,
                 skipped=True,
             )
@@ -623,10 +623,10 @@ class CourseWorkflow:
                 topic, input_parts=input_parts, input_files=input_files
             )
             usage_steps.append(
-                ("Step 1 — Lesson planning", self._last_lesson_usage, False)
+                ("Step 1 - Lesson planning", self._last_lesson_usage, False)
             )
             self._print_openrouter_step(
-                "Step 1 — Lesson planning",
+                "Step 1 - Lesson planning",
                 usage=self._last_lesson_usage,
             )
             lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
@@ -643,9 +643,9 @@ class CourseWorkflow:
             script_usage = getattr(self.script_generator, "last_generation_usage", None)
             if not isinstance(script_usage, LLMUsage):
                 script_usage = None
-            usage_steps.append(("Step 2 — Script generation", script_usage, False))
+            usage_steps.append(("Step 2 - Script generation", script_usage, False))
             self._print_openrouter_step(
-                "Step 2 — Script generation",
+                "Step 2 - Script generation",
                 usage=script_usage,
             )
 
@@ -691,14 +691,14 @@ class CourseWorkflow:
                 if not isinstance(fix_usage, LLMUsage):
                     fix_usage = None
                 usage_steps.append(
-                    (f"Step 3 {iter_label} — error fix", fix_usage, False)
+                    (f"Step 3 {iter_label} - error fix", fix_usage, False)
                 )
                 self._print_openrouter_step(
-                    f"Step 3 {iter_label} — error fix", usage=fix_usage
+                    f"Step 3 {iter_label} - error fix", usage=fix_usage
                 )
                 continue  # retry render
 
-            # Render succeeded — ask the LLM to review the video
+            # Render succeeded - ask the LLM to review the video
             if skip_review or iteration >= max_iters - 1:
                 break  # review disabled or last iteration
 
@@ -714,10 +714,10 @@ class CourseWorkflow:
             if not isinstance(review_usage, LLMUsage):
                 review_usage = None
             usage_steps.append(
-                (f"Step 3 {iter_label} — video review", review_usage, False)
+                (f"Step 3 {iter_label} - video review", review_usage, False)
             )
             self._print_openrouter_step(
-                f"Step 3 {iter_label} — video review", usage=review_usage
+                f"Step 3 {iter_label} - video review", usage=review_usage
             )
 
             if not changed:
@@ -741,7 +741,7 @@ class CourseWorkflow:
                 context_hash=video_hash,
             )
         else:
-            # Low quality was already the target — save to video cache now
+            # Low quality was already the target - save to video cache now
             from src.cache import save_video_to_cache as _save_video
 
             _save_video(slug, video_hash, final_video)

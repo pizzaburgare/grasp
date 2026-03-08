@@ -2,8 +2,8 @@
 """
 Manual inspection tool for the video review step.
 
-Uses ManimScriptGenerator._extract_video_frames — the exact same function
-called by the review agent — so what you see here is pixel-for-pixel what
+Uses ManimScriptGenerator._extract_video_frames - the exact same function
+called by the review agent - so what you see here is pixel-for-pixel what
 the LLM receives (JPEG-compressed at the production quality setting).
 
 Navigate with ← / → arrow keys or the Prev / Next buttons.
@@ -32,7 +32,7 @@ BG = "#0d0d0d"
 
 
 # ---------------------------------------------------------------------------
-# SSIM — local helper for the inspector UI only (not used by the agent)
+# SSIM - local helper for the inspector UI only (not used by the agent)
 # ---------------------------------------------------------------------------
 
 
@@ -55,7 +55,7 @@ def _global_ssim(a: np.ndarray, b: np.ndarray) -> float:
 
 
 # ---------------------------------------------------------------------------
-# LLM review — reuses the production review pipeline per-frame
+# LLM review - reuses the production review pipeline per-frame
 # ---------------------------------------------------------------------------
 
 
@@ -313,7 +313,7 @@ class FrameViewer:
         # Similarity score
         sim = self.sims[self.idx]
         if sim is None:
-            self.sim_text.set_text("SSIM vs prev:  —")
+            self.sim_text.set_text("SSIM vs prev:  -")
             self.sim_text.set_color("#585b70")
         else:
             pct = sim * 100

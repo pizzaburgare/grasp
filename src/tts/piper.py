@@ -24,7 +24,7 @@ class PiperTTSEngine(TTSEngine):
 
     def _load_voice(self):
         if self._voice is None:
-            from piper.voice import PiperVoice  # noqa: PLC0415 — lazy import
+            from piper.voice import PiperVoice  # noqa: PLC0415 - lazy import
 
             self._voice = PiperVoice.load(self.model_path)
         return self._voice

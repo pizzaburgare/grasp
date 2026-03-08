@@ -10,7 +10,7 @@ You are an expert Manim developer creating educational math videos. Generate a c
 2. Import AudioManager: `from src.audiomanager import AudioManager`
 3. Use AudioManager for all narration: `audio_manager.say("...")` followed by `audio_manager.done_say()`
 4. Create ONE Scene class that extends `Scene`
-5. **Always call `audio_manager.merge_audio()` as the very last statement in `construct()`** — this writes the merged audio file needed by the pipeline
+5. **Always call `audio_manager.merge_audio()` as the very last statement in `construct()`** - this writes the merged audio file needed by the pipeline
 6. Use only Manim Community Edition syntax (v0.20.1+)
 7. Follow this structure for each concept:
    - Display title/step text
@@ -241,7 +241,7 @@ class SineCurveUnitCircle(Scene):
         )
 
         audio_manager.say(
-            "Watch closely. We track a single point orbiting the center. We are interested specifically in its height—its vertical distance from the center."
+            "Watch closely. We track a single point orbiting the center. We are interested specifically in its height-its vertical distance from the center."
         )
         self.play(FadeIn(dot), Create(radius_line))
         audio_manager.done_say()

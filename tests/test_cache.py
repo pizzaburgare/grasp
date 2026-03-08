@@ -131,10 +131,10 @@ class TestHashContext:
     def test_empty_input_dir_differs_from_no_input_dir(self, tmp_path):
         from src.cache import hash_context
 
-        # Empty directory — no files, but we still pass a path
+        # Empty directory - no files, but we still pass a path
         h_empty_dir = hash_context("topic", str(tmp_path))
         # Same topic, empty dir shouldn't add any bytes → should equal hash with no dir
-        # (depends on implementation — both are valid; we just verify determinism)
+        # (depends on implementation - both are valid; we just verify determinism)
         assert h_empty_dir == hash_context("topic", str(tmp_path))
 
     def test_multiple_files_order_independent(self, tmp_path):
@@ -849,7 +849,7 @@ class TestWorkflowCacheIntegration:
 
 
 # ===========================================================================
-# render_and_merge — MP4 selection logic
+# render_and_merge - MP4 selection logic
 # ===========================================================================
 
 
@@ -973,7 +973,7 @@ class TestRenderAndMergeVideoSelection:
         monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
         monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
 
-        # Only a partial_movie_files entry exists — no real output yet
+        # Only a partial_movie_files entry exists - no real output yet
         partial = manim_dir / "videos" / "abc" / "partial_movie_files" / "chunk.mp4"
         self._write_mp4(partial)
 

@@ -230,7 +230,7 @@ Generate a complete Manim script that:
     def _sanitize_latex(code: str) -> str:
         """Escape bare LaTeX special chars inside Text() and Title() string args."""
 
-        # Match Text("...") or Title("...") — single or double quoted, non-greedy
+        # Match Text("...") or Title("...") - single or double quoted, non-greedy
         def _escape_arg(m: re.Match) -> str:
             prefix = m.group(1)  # Text( or Title(
             quote = m.group(2)  # " or '
@@ -404,7 +404,7 @@ Generate a complete Manim script that:
         print("Reviewing rendered video for visual issues ...")
         frames = self._extract_video_frames(video_path)
         if not frames:
-            print("  Could not extract frames — skipping review.")
+            print("  Could not extract frames - skipping review.")
             return script, False
 
         print(f"  Reviewing {len(frames)} unique frames one-by-one ...")
@@ -449,7 +449,7 @@ Generate a complete Manim script that:
         self.last_review_usage = total_usage
 
         if not flagged:
-            print("  Video review: APPROVED — no issues found in any frame.")
+            print("  Video review: APPROVED - no issues found in any frame.")
             return script, False
 
         # Aggregate all unique failed criteria across flagged frames
@@ -495,7 +495,7 @@ Generate a complete Manim script that:
             {"type": "text", "text": fix_text},
         ]
         for label, img_part, notes in frames:
-            annotation = f"{label}" + (f" — {notes}" if notes else "")
+            annotation = f"{label}" + (f" - {notes}" if notes else "")
             user_content.append({"type": "text", "text": annotation})
             user_content.append(img_part)
 
@@ -508,7 +508,7 @@ Generate a complete Manim script that:
         fix: CodeFix = structured_fix_llm.invoke(messages)  # type: ignore[assignment]
 
         if not fix.edits:
-            print("  Fix agent returned no edits — returning original script.")
+            print("  Fix agent returned no edits - returning original script.")
             return script
 
         # Ensure the original ends with a newline for dmp_lines_apply
@@ -527,7 +527,7 @@ Generate a complete Manim script that:
                 applied += 1
             else:
                 print(
-                    f"  Warning: edit could not be applied — skipping: {edit.old_code[:60]!r}"
+                    f"  Warning: edit could not be applied - skipping: {edit.old_code[:60]!r}"
                 )
 
         print(f"  Applied {applied}/{len(fix.edits)} edits from fix agent.")

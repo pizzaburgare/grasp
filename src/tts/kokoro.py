@@ -34,7 +34,7 @@ class KokoroTTSEngine(TTSEngine):
 
     def _load_pipeline(self):
         if self._pipeline is None:
-            from kokoro import KPipeline  # noqa: PLC0415 — lazy import
+            from kokoro import KPipeline  # noqa: PLC0415 - lazy import
 
             self._pipeline = KPipeline(
                 lang_code=self.lang_code, repo_id="hexgrad/Kokoro-82M"

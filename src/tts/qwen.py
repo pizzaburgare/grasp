@@ -10,7 +10,6 @@ from .base import TTSEngine
 # Default reference audio bundled alongside this file (used for voice cloning
 # when QWEN_TTS_REF_AUDIO is not set and the model type is 'base').
 _BUNDLED_REF_AUDIO = str(Path(__file__).parent / "clone.wav")
-_BUNDLED_REF_TEXT = str(Path(__file__).parent / "clone.txt")
 
 # Suppress verbose logging from qwen_tts and its transformers dependency
 logging.getLogger("qwen_tts").setLevel(logging.WARNING)
@@ -52,7 +51,7 @@ class QwenTTSEngine(TTSEngine):
 
     def _load_model(self):
         if self._model is None:
-            from qwen_tts import Qwen3TTSModel  # noqa: PLC0415 — lazy import
+            from qwen_tts import Qwen3TTSModel  # noqa: PLC0415 - lazy import
 
             self._model = Qwen3TTSModel.from_pretrained(
                 self.model_id,
