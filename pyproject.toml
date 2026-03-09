@@ -55,6 +55,8 @@ exclude = [
     ".cache",
     "output",
     ".venv",
+    "**/__pycache__",
+    "**/.*",
 ]
 
 [tool.pytest.ini_options]
