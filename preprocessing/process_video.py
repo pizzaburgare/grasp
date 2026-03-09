@@ -51,7 +51,7 @@ def _describe_frame(
 
         img = Image.fromarray(frame)  # type: ignore[arg-type]
         buf = io.BytesIO()
-        img.save(buf, format="JPEG")
+        img.save(buf, format="JPEG", quality=70)
         data = base64.b64encode(buf.getvalue()).decode()
 
         llm = ChatOpenAI(

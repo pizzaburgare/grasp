@@ -4,6 +4,8 @@ from pathlib import Path
 from process_pdf import convert_pdf_to_md
 from process_video import mp4_to_text
 
+from preprocessing.process_images import image_to_md_llm
+
 
 def _already_processed(dest: Path) -> bool:
     if dest.exists() and dest.stat().st_size > 0:
@@ -67,6 +69,18 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
             cost = convert_pdf_to_md(str(file_path), str(dest), local=local)
             if cost > 0:
                 print(f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
+            total_cost += cost
+        elif suffix in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}:
+            # If image, convert to markdown using image_to_md_llm
+            dest = output_root / relative.with_suffix(".md")
+            if _already_processed(dest):
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            cost = image_to_md_llm(str(file_path), str(dest))
+            if cost > 0:
+                print(
+                    f"Processing Image: {file_path} -> {dest} (LLM cost: ${cost:.4f})"
+                )
             total_cost += cost
         else:
             print(f"Unsupported file type (skipping): {file_path}")
