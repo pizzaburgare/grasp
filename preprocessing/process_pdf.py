@@ -7,6 +7,8 @@ from langchain_openai import ChatOpenAI
 from markitdown import MarkItDown
 from pydantic import SecretStr
 
+from src.llm_metrics import extract_llm_usage
+
 
 def local_pdf_conversion(input_path, output_path):
     """
@@ -47,7 +49,7 @@ def pdf_to_md_llm(
     input_path: str,
     output_path: str | None = None,
     model: str = "google/gemini-2.0-flash-001",
-) -> str:
+) -> float:
     """
     Sends a PDF to an LLM and returns the transcription as Markdown.
     Optionally writes the result to output_path.
@@ -86,19 +88,25 @@ def pdf_to_md_llm(
     response = llm.invoke(messages)
     markdown = str(response.content)
 
+    cost = extract_llm_usage(response).cost_usd
+
+    if cost is None:
+        cost = 0.0
+
     if output_path:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown)
         print(f"LLM transcription saved to: {output_path}")
 
-    return markdown
+    return cost
 
 
 def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False):
     if local:
         local_pdf_conversion(input_file, output_file)
+        return 0.0
     else:
-        pdf_to_md_llm(input_file, output_file)
+        return pdf_to_md_llm(input_file, output_file)
 
 
 if __name__ == "__main__":

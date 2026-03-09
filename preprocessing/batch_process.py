@@ -5,10 +5,19 @@ from process_pdf import convert_pdf_to_md
 from process_video import mp4_to_text
 
 
+def _already_processed(dest: Path) -> bool:
+    if dest.exists() and dest.stat().st_size > 0:
+        print(f"Skipping (already exists): {dest}")
+        return True
+    return False
+
+
 def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
     input_root = input_dir
     output_root = output_dir
     output_root.mkdir(parents=True, exist_ok=True)
+
+    total_cost = 0.0
 
     for file_path in input_root.rglob("*"):
         if not file_path.is_file():
@@ -20,6 +29,8 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
         if suffix == ".md":
             # If markdown, copy as is
             dest = output_root / relative
+            if _already_processed(dest):
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file_path, dest)
             print(f"Copied: {file_path} -> {dest}")
@@ -27,6 +38,8 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
         if suffix == ".txt":
             # If text, copy as is
             dest = output_root / relative
+            if _already_processed(dest):
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file_path, dest)
             print(f"Copied: {file_path} -> {dest}")
@@ -34,15 +47,28 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
         if suffix == ".mp4":
             # If mp4, transcribe audio and save as txt with timestamps
             dest = output_root / relative.with_suffix(".txt")
+            if _already_processed(dest):
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
-            mp4_to_text(str(file_path), str(dest))
+            cost = mp4_to_text(str(file_path), str(dest))
+            if cost > 0:
+                print(
+                    f"Processing video: {file_path} -> {dest} (LLM cost: ${cost:.4f})"
+                )
+            total_cost += cost
             print(f"Processing video: {file_path} -> {dest}")
 
         elif suffix == ".pdf":
             # If pdf, convert to markdown using markitdown
             dest = output_root / relative.with_suffix(".md")
+            if _already_processed(dest):
+                continue
             dest.parent.mkdir(parents=True, exist_ok=True)
-            convert_pdf_to_md(str(file_path), str(dest), local=local)
+            cost = convert_pdf_to_md(str(file_path), str(dest), local=local)
+            if cost > 0:
+                print(f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
+            total_cost += cost
+    print(f"Batch processing complete. Total LLM cost: ${total_cost:.4f}")
 
 
 if __name__ == "__main__":

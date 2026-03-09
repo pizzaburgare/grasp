@@ -10,6 +10,8 @@ from moviepy import VideoFileClip  # type: ignore
 from PIL import Image
 from pydantic import SecretStr
 
+from src.llm_metrics import extract_llm_usage
+
 
 def _extract_audio(video_path: str, output_path: str):
     video_clip = VideoFileClip(video_path)
@@ -40,7 +42,7 @@ def _parse_start_times(transcription: str) -> list[float]:
 
 def _describe_frame(
     video_path: str, timestamp: float, model: str = "google/gemini-2.0-flash-001"
-) -> str:
+) -> tuple[float, str]:
     """Extracts a frame at the given timestamp and returns an LLM description."""
     try:
         video_clip = VideoFileClip(video_path)
@@ -76,13 +78,18 @@ def _describe_frame(
         ]
 
         response = llm.invoke(messages)
-        return f"Description of image at {timestamp:.2f}s: {response.content}"
+        cost = extract_llm_usage(response).cost_usd
+
+        if cost is None:
+            cost = 0.0
+
+        return (cost, f"Description of image at {timestamp:.2f}s: {response.content}")
     except Exception as e:
         print(f"An error occurred while processing the frame: {e}")
-        return f"Error processing image at {timestamp:.2f}s"
+        return (0.0, f"Error processing image at {timestamp:.2f}s")
 
 
-def mp4_to_text(video_path: str, output_path: str):
+def mp4_to_text(video_path: str, output_path: str) -> float:
     """
     Converts an MP4 to a text file containing timestamped transcription and
     VLM frame descriptions for each segment. Uses a temp file for intermediate audio.
@@ -94,13 +101,18 @@ def mp4_to_text(video_path: str, output_path: str):
     lines = transcription.splitlines()
     times = _parse_start_times(transcription)
 
+    total_cost = 0.0
     output = ""
     for time, line in zip(times, lines):
         output += f"{line.strip()}\n"
-        output += _describe_frame(video_path, time) + "\n"
+        cost, desctiption = _describe_frame(video_path, time)
+        total_cost += cost
+        output += desctiption + "\n"
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(output)
+
+    return total_cost
 
 
 if __name__ == "__main__":
