@@ -68,6 +68,9 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
             if cost > 0:
                 print(f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
             total_cost += cost
+        else:
+            print(f"Unsupported file type (skipping): {file_path}")
+
     print(f"Batch processing complete. Total LLM cost: ${total_cost:.4f}")
 
 
