@@ -1,9 +1,14 @@
+import base64
+import os
 import re
 
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from markitdown import MarkItDown
+from pydantic import SecretStr
 
 
-def clean_pdf_conversion(input_path, output_path):
+def local_pdf_conversion(input_path, output_path):
     """
     Converts a PDF to Markdown and strips out CID tags,
     excessive formatting characters, and redundant whitespace.
@@ -38,8 +43,65 @@ def clean_pdf_conversion(input_path, output_path):
         print(f"An error occurred during processing: {e}")
 
 
-# Usage
+def pdf_to_md_llm(
+    input_path: str,
+    output_path: str | None = None,
+    model: str = "google/gemini-2.0-flash-001",
+) -> str:
+    """
+    Sends a PDF to an LLM and returns the transcription as Markdown.
+    Optionally writes the result to output_path.
+    """
+    llm = ChatOpenAI(
+        model=model,
+        api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "http://localhost",
+            "X-Title": "PDF to Markdown",
+        },
+    )
+
+    with open(input_path, "rb") as f:
+        encoded = base64.standard_b64encode(f.read()).decode("utf-8")
+
+    messages = [
+        SystemMessage(
+            content="You are a helpful assistant that transcribes documents."
+        ),
+        HumanMessage(
+            content=[
+                {
+                    "type": "file",
+                    "file": {
+                        "filename": os.path.basename(input_path),
+                        "file_data": f"data:application/pdf;base64,{encoded}",
+                    },
+                },
+                {"type": "text", "text": "Transcribe this PDF as markdown."},
+            ]
+        ),
+    ]
+
+    response = llm.invoke(messages)
+    markdown = str(response.content)
+
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(markdown)
+        print(f"LLM transcription saved to: {output_path}")
+
+    return markdown
+
+
+def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False):
+    if local:
+        local_pdf_conversion(input_file, output_file)
+    else:
+        pdf_to_md_llm(input_file, output_file)
+
+
 if __name__ == "__main__":
-    INPUT_FILE = "slides.pdf"
-    OUTPUT_FILE = "output.md"
-    clean_pdf_conversion(INPUT_FILE, OUTPUT_FILE)
+    INPUT_FILE = "test.pdf"
+    OUTPUT_FILE = "test_output.md"
+    convert_pdf_to_md(INPUT_FILE, OUTPUT_FILE, local=True)

@@ -1,13 +1,14 @@
 import shutil
 from pathlib import Path
 
-from process_pdf import clean_pdf_conversion
+from process_pdf import convert_pdf_to_md
 from process_video import mp4_to_text
 
 
-def batch_process(input_dir: str, output_dir: str):
-    input_root = Path(input_dir)
-    output_root = Path(output_dir)
+def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
+    input_root = input_dir
+    output_root = output_dir
+    output_root.mkdir(parents=True, exist_ok=True)
 
     for file_path in input_root.rglob("*"):
         if not file_path.is_file():
@@ -41,10 +42,27 @@ def batch_process(input_dir: str, output_dir: str):
             # If pdf, convert to markdown using markitdown
             dest = output_root / relative.with_suffix(".md")
             dest.parent.mkdir(parents=True, exist_ok=True)
-            clean_pdf_conversion(str(file_path), str(dest))
+            convert_pdf_to_md(str(file_path), str(dest), local=local)
 
 
 if __name__ == "__main__":
-    INPUT_DIR = "rag_source/test/raw"
-    OUTPUT_DIR = "rag_source/test/processed"
-    batch_process(INPUT_DIR, OUTPUT_DIR)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Batch process course files.")
+    parser.add_argument(
+        "directory",
+        type=Path,
+        help="Course directory (must contain a 'raw' subdirectory)",
+    )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        default=False,
+        help="Use local model for PDF conversion",
+    )
+    args = parser.parse_args()
+
+    INPUT_DIR = args.directory / "raw"
+    OUTPUT_DIR = args.directory / "processed"
+
+    batch_process(INPUT_DIR, OUTPUT_DIR, local=args.local)

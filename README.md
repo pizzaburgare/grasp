@@ -4,7 +4,7 @@
 
 **Turn any university course into high quality video lessons - 100% automatically**
 
-Website: [grasp-team.se](https://grasp-team.se)  
+Website: [grasp-team.se](https://grasp-team.se)
 YouTube: [@grasp-team](https://www.youtube.com/@grasp-team)
 
 ## Problem Statement
@@ -155,6 +155,28 @@ Place reference materials in the input directory. All formats are converted to L
 | PDF | `.pdf` (each page rendered as image, max 60 pages) |
 | Images | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp` |
 | Videos | `.mp4`, `.mov`, `.avi`, `.mkv`, `.webm` (sampled at 1 fps, max 240 frames) |
+
+## Preprocessing
+
+Before generating a lesson, raw course materials can be batch-preprocessed into a normalized format using `batch_process.py`. It recursively scans a `raw/` subdirectory and converts each file based on its type, writing results to a `processed/` subdirectory alongside it.
+
+| Input type | Output |
+|------------|--------|
+| `.pdf` | Converted to `.md` via markitdown or an LLM |
+| `.mp4` | Transcribed to `.txt` with timestamps and screenshots processed by a VLM |
+| `.md`, `.txt` | Copied as-is |
+
+```bash
+uv run preprocessing/batch_process.py <directory>
+```
+
+`<directory>` should be a course folder that contains a `raw/` subdirectory, e.g.:
+
+```bash
+uv run preprocessing/batch_process.py courses/FMNF05
+```
+
+Processed files are written to `<directory>/processed/`, mirroring the original folder structure.
 
 ## Text-to-Speech
 
