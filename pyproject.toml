@@ -29,6 +29,8 @@ dependencies = [
     "markitdown[pdf]>=0.1.5",
     "pyreadline3>=3.5.4",
     "openai-whisper>=20250625",
+    "diff-match-patch>=20241021",
+    "pip>=26.0.1",
 ]
 
 [project.scripts]
