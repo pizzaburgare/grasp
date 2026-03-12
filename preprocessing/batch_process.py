@@ -108,4 +108,7 @@ if __name__ == "__main__":
     INPUT_DIR = args.directory / "raw"
     OUTPUT_DIR = args.directory / "processed"
 
+    print(f"Input:  {INPUT_DIR.resolve()}")
+    print(f"Output: {OUTPUT_DIR.resolve()}")
+
     batch_process(INPUT_DIR, OUTPUT_DIR, local=args.local)
