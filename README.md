@@ -162,8 +162,9 @@ Before generating a lesson, raw course materials can be batch-preprocessed into 
 
 | Input type | Output |
 |------------|--------|
-| `.pdf` | Converted to `.md` via markitdown or an LLM |
+| `.pdf` | Converted to `.md`; TOC-based PDFs are split into topic files |
 | `.mp4` | Transcribed to `.txt` with timestamps and screenshots processed by a VLM |
+| Image files (`.png`, `.jpg`, `.webp`, etc.) | Converted to `.md` via VLM |
 | `.md`, `.txt` | Copied as-is |
 
 ```bash
@@ -176,7 +177,42 @@ uv run preprocessing/batch_process.py <directory>
 uv run preprocessing/batch_process.py courses/FMNF05
 ```
 
-Processed files are written to `<directory>/processed/`, mirroring the original folder structure.
+Use local (non-LLM) PDF conversion:
+
+```bash
+uv run preprocessing/batch_process.py courses/FMNF05 --local
+```
+
+Processed files are written to `<directory>/processed/`, mirroring the original folder structure. Existing non-empty outputs are skipped.
+
+## Document Selection
+
+After preprocessing, use the document selector to pick the most relevant files for a lesson topic from a large `processed/` corpus.
+
+The selector uses an LLM agent that:
+- explores folders/files,
+- summarizes candidate documents,
+- returns the most relevant source files (typically lectures + a handful of exams).
+
+Run it on a processed course directory:
+
+```bash
+uv run src/document_selector.py <processed_dir> "<topic query>"
+```
+
+Example:
+
+```bash
+uv run src/document_selector.py courses/FMNF05/processed "QR decomposition using Gram-Schmidt orthogonalization"
+```
+
+Output format:
+- one selected file path per line,
+- then token/cost usage summary.
+
+Notes:
+- Supported candidate file types are `.md`, `.markdown`, and `.txt`.
+- Paths printed by the selector are absolute paths on your machine.
 
 ## Text-to-Speech
 
