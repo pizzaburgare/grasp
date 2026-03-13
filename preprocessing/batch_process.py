@@ -1,6 +1,9 @@
+import os
 import shutil
+import tempfile
 from pathlib import Path
 
+from extract_from_pdf import extract_topic_pdf, get_toc_topics, safe_topic_name
 from process_pdf import convert_pdf_to_md
 from process_video import mp4_to_text
 
@@ -61,15 +64,41 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
             print(f"Processing video: {file_path} -> {dest}")
 
         elif suffix == ".pdf":
-            # If pdf, convert to markdown using markitdown
-            dest = output_root / relative.with_suffix(".md")
-            if _already_processed(dest):
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            cost = convert_pdf_to_md(str(file_path), str(dest), local=local)
-            if cost > 0:
-                print(f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
-            total_cost += cost
+            topics = get_toc_topics(str(file_path))
+            if topics:
+                # Multi-topic PDF: extract and process each topic separately
+                for i, topic in enumerate(topics):
+                    safe = safe_topic_name(topic["title"])
+                    dest = (
+                        output_root / relative.parent / f"{file_path.stem}__{safe}.md"
+                    )
+                    if _already_processed(dest):
+                        continue
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pdf")
+                    os.close(tmp_fd)
+                    try:
+                        extract_topic_pdf(str(file_path), i, tmp_path)
+                        cost = convert_pdf_to_md(tmp_path, str(dest), local=local)
+                        if cost > 0:
+                            print(
+                                f"Processing PDF topic '{topic['title']}': {file_path} -> {dest} (LLM cost: ${cost:.4f})"
+                            )
+                        total_cost += cost
+                    finally:
+                        os.unlink(tmp_path)
+            else:
+                # No TOC: process whole PDF normally
+                dest = output_root / relative.with_suffix(".md")
+                if _already_processed(dest):
+                    continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                cost = convert_pdf_to_md(str(file_path), str(dest), local=local)
+                if cost > 0:
+                    print(
+                        f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})"
+                    )
+                total_cost += cost
         elif suffix in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}:
             # If image, convert to markdown using image_to_md_llm
             dest = output_root / relative.with_suffix(".md")

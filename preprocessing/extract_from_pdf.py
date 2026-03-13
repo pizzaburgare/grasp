@@ -10,6 +10,25 @@ def get_toc_topics(pdf_path):
         return [{"title": t[1], "page": t[2] - 1} for t in doc.get_toc() if t[0] == 1]
 
 
+def safe_topic_name(title: str) -> str:
+    """Returns a filesystem-safe version of a topic title."""
+    return re.sub(r'[\\/*?:"<>|]', "", title).strip().replace(" ", "_")
+
+
+def extract_topic_pdf(pdf_path: str, topic_idx: int, output_pdf_path: str) -> None:
+    """Extracts pages for the topic at topic_idx into output_pdf_path."""
+    topics = get_toc_topics(pdf_path)
+    if topic_idx >= len(topics):
+        raise IndexError(f"Topic index {topic_idx} out of range ({len(topics)} topics)")
+    with fitz.open(pdf_path) as doc:
+        start = topics[topic_idx]["page"]
+        end = topics[topic_idx + 1]["page"] if topic_idx + 1 < len(topics) else len(doc)
+        new_doc = fitz.open()
+        new_doc.insert_pdf(doc, from_page=start, to_page=end - 1)
+        new_doc.save(output_pdf_path)
+        new_doc.close()
+
+
 def extract_topic(pdf_path, target_topic):
     topics = get_toc_topics(pdf_path)
     idx = next(
