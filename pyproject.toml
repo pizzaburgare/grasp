@@ -27,11 +27,13 @@ dependencies = [
     "pypdfium2>=4.30.0",
     "python-dotenv>=1.2.2",
     "markitdown[pdf]>=0.1.5",
+    "pyyaml>=6.0.2",
     "pyreadline3>=3.5.4",
     "openai-whisper>=20250625",
     "diff-match-patch>=20241021",
     "pip>=26.0.1",
     "pymupdf>=1.27.2",
+    "types-pyyaml>=6.0.12.20250915",
 ]
 
 [project.scripts]

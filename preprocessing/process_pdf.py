@@ -1,13 +1,27 @@
 import base64
 import os
 import re
+from datetime import date
 
+import yaml
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from markitdown import MarkItDown
 from pydantic import SecretStr
 
 from src.llm_metrics import extract_llm_usage
+
+
+def strip_outer_markdown_fence(text: str) -> str:
+    """Removes a single outer ```md/```markdown fence wrapper if present."""
+    stripped = text.strip()
+    lines = stripped.splitlines()
+    if len(lines) >= 2 and re.fullmatch(
+        r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE
+    ):
+        if lines[-1].strip() == "```":
+            return "\n".join(lines[1:-1]).strip()
+    return stripped
 
 
 def local_pdf_conversion(input_path, output_path):
@@ -19,7 +33,7 @@ def local_pdf_conversion(input_path, output_path):
         # Initialize converter and process file
         md = MarkItDown()
         result = md.convert(input_path)
-        content = result.markdown
+        content = strip_outer_markdown_fence(result.markdown)
 
         # 1. Remove CID tags: (cid:123)
         content = re.sub(r"\(cid:\d+\)", "", content)
@@ -51,8 +65,8 @@ def pdf_to_md_llm(
     model: str = "google/gemini-2.0-flash-001",
 ) -> float:
     """
-    Sends a PDF to an LLM and returns the transcription as Markdown.
-    Optionally writes the result to output_path.
+    Sends a PDF to an LLM, then generates a concise summary.
+    Optionally writes Markdown with summary frontmatter to output_path.
     """
     llm = ChatOpenAI(
         model=model,
@@ -89,16 +103,47 @@ def pdf_to_md_llm(
     ]
 
     response = llm.invoke(messages)
-    markdown = str(response.content)
+    markdown = strip_outer_markdown_fence(str(response.content))
 
-    cost = extract_llm_usage(response).cost_usd
+    transcription_cost = extract_llm_usage(response).cost_usd
 
-    if cost is None:
-        cost = 0.0
+    summary_response = llm.invoke(
+        [
+            SystemMessage(content="You are a concise document summarizer."),
+            HumanMessage(
+                content=(
+                    "Summarize this document concisely. Return ONLY the summary text. "
+                    "Do not include introductory phrases like 'Here is a summary'. "
+                    "Do not use double quotes, formatting, or line breaks in your response.\n\n"
+                    f"Document:\n{markdown}"
+                )
+            ),
+        ]
+    )
+
+    llm_output = str(summary_response.content)
+    safe_summary = llm_output.strip().replace('"', "'")
+    safe_summary = safe_summary.replace("\n", " ")
+
+    yaml_metadata = yaml.safe_dump(
+        {"summary": safe_summary, "date": date.today().isoformat()},
+        sort_keys=False,
+        allow_unicode=True,
+    ).strip()
+    frontmatter = f"---\n{yaml_metadata}\n---\n\n"
+    final_document = frontmatter + markdown
+
+    summary_cost = extract_llm_usage(summary_response).cost_usd
+
+    cost = 0.0
+    if transcription_cost is not None:
+        cost += transcription_cost
+    if summary_cost is not None:
+        cost += summary_cost
 
     if output_path:
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(markdown)
+            f.write(final_document)
         print(f"LLM transcription saved to: {output_path}")
 
     return cost
