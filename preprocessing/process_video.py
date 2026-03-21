@@ -33,16 +33,10 @@ def _transcribe(audio_path: str) -> str:
 
 
 def _parse_start_times(transcription: str) -> list[float]:
-    return [
-        float(line.split("s ->")[0].strip())
-        for line in transcription.splitlines()
-        if "s ->" in line
-    ]
+    return [float(line.split("s ->")[0].strip()) for line in transcription.splitlines() if "s ->" in line]
 
 
-def _describe_frame(
-    video_path: str, timestamp: float, model: str = "google/gemini-2.0-flash-001"
-) -> tuple[float, str]:
+def _describe_frame(video_path: str, timestamp: float, model: str = "google/gemini-2.0-flash-001") -> tuple[float, str]:
     """Extracts a frame at the given timestamp and returns an LLM description."""
     try:
         video_clip = VideoFileClip(video_path)
@@ -103,7 +97,7 @@ def mp4_to_text(video_path: str, output_path: str) -> float:
 
     total_cost = 0.0
     output = ""
-    for time, line in zip(times, lines):
+    for time, line in zip(times, lines, strict=False):
         output += f"{line.strip()}\n"
         cost, desctiption = _describe_frame(video_path, time)
         total_cost += cost
@@ -118,9 +112,7 @@ def mp4_to_text(video_path: str, output_path: str) -> float:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Transcribe an MP4 video to text with frame descriptions."
-    )
+    parser = argparse.ArgumentParser(description="Transcribe an MP4 video to text with frame descriptions.")
     parser.add_argument("input", help="Path to the input MP4 file")
     parser.add_argument("output", help="Path to the output TXT file")
     args = parser.parse_args()

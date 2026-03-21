@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import base64
+import contextlib
 import io
 import sys
 from pathlib import Path
@@ -86,10 +87,7 @@ def run_review(
             result = structured_llm.invoke([sys_msg, HumanMessage(content=user_content)])
             review: VideoReview = result["parsed"]  # type: ignore[index]
             reviews.append(review)
-            if review.has_issues:
-                status = f"ISSUES ({', '.join(review.failed_criteria())})"
-            else:
-                status = "OK"
+            status = f"ISSUES ({', '.join(review.failed_criteria())})" if review.has_issues else "OK"
         except Exception as exc:
             reviews.append(None)
             status = f"ERROR ({exc})"
@@ -132,10 +130,8 @@ class FrameViewer:
     def _build_ui(self) -> None:
         has_reviews = self.reviews is not None
         self.fig = plt.figure(figsize=(20, 9), facecolor=BG)
-        try:
+        with contextlib.suppress(Exception):
             self.fig.canvas.manager.set_window_title("Frame Inspector")  # type: ignore[union-attr]
-        except Exception:
-            pass
 
         # Rows: header | images (+ optional review panel) | controls
         outer = gridspec.GridSpec(
@@ -316,11 +312,11 @@ class FrameViewer:
             filled = round(pct / 5)  # 20-block bar
             bar = "█" * filled + "░" * (20 - filled)
             if pct >= 90:
-                color = "#a6e3a1"  # green  – nearly identical
+                color = "#a6e3a1"  # green  - nearly identical
             elif pct >= 70:
-                color = "#f9e2af"  # yellow – noticeable change
+                color = "#f9e2af"  # yellow - noticeable change
             else:
-                color = "#f38ba8"  # red    – very different
+                color = "#f38ba8"  # red    - very different
             self.sim_text.set_text(f"SSIM vs prev:  {pct:5.1f}%   {bar}")
             self.sim_text.set_color(color)
 

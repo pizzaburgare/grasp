@@ -8,7 +8,7 @@ import io
 import os
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from dotenv import load_dotenv
@@ -65,7 +65,7 @@ class VideoReview(BaseModel):
     broken_animations: bool = Field(description="Visual artifacts, glitches, or misplaced objects are visible.")
     content_overflow: bool = Field(description="Content extends outside the visible frame boundary.")
     latex_rendering: bool = Field(description="LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations).")
-    notes: Optional[str] = Field(
+    notes: str | None = Field(
         default=None,
         description="Optional 4-8 word description of the problem(s) found. Only set when at least one criterion is true.",
     )
@@ -165,7 +165,7 @@ class ManimScriptGenerator:
         self,
         lesson_content: str,
         topic: str,
-        input_parts: Optional[list[dict[str, Any]]] = None,
+        input_parts: list[dict[str, Any]] | None = None,
     ) -> str:
         text = f"""Topic: {topic}
 
@@ -230,7 +230,7 @@ Generate a complete Manim script that:
         lesson_content: str,
         topic: str,
         output_path: str | Path,
-        input_parts: Optional[list[dict[str, Any]]] = None,
+        input_parts: list[dict[str, Any]] | None = None,
     ) -> Path:
         print(f"Generating Manim script ({self.model}) ...")
         script = self.generate_script(lesson_content, topic, input_parts)
@@ -292,11 +292,9 @@ Generate a complete Manim script that:
                 next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
 
                 mae = float(np.mean(np.abs(curr_frame.astype(np.int16) - next_frame.astype(np.int16))))
-                if mae <= _SCENE_SETTLE_THRESHOLD:  # settled
-                    if t - last_kept_t >= 1.0:  # 1 s gap
-                        if float(np.std(curr_frame)) >= 2.0:  # not blank
-                            candidates.append((t, curr_frame.copy()))
-                            last_kept_t = t
+                if mae <= _SCENE_SETTLE_THRESHOLD and t - last_kept_t >= 1.0 and float(np.std(curr_frame)) >= 2.0:  # not blank
+                    candidates.append((t, curr_frame.copy()))
+                    last_kept_t = t
 
                 curr_frame = next_frame
                 t = next_t
@@ -432,7 +430,7 @@ Generate a complete Manim script that:
                 all_failed[c] = None
         all_failed_list = list(all_failed)
 
-        print(f"  Video review: {len(flagged)}/{len(frames)} frames flagged, " f"{len(all_failed_list)} unique criteria failed:")
+        print(f"  Video review: {len(flagged)}/{len(frames)} frames flagged, {len(all_failed_list)} unique criteria failed:")
         for criterion in all_failed_list:
             print(f"    \u2022 {criterion}")
 

@@ -17,12 +17,12 @@ _REGISTRY: dict[str, type[TTSEngine]] = {
 _DEFAULT_ENGINE = DEFAULT_TTS_ENGINE
 
 __all__ = [
-    "TTSEngine",
-    "QwenTTSEngine",
-    "PiperTTSEngine",
     "KokoroTTSEngine",
-    "get_default_engine",
+    "PiperTTSEngine",
+    "QwenTTSEngine",
+    "TTSEngine",
     "available_engines",
+    "get_default_engine",
 ]
 
 
@@ -35,7 +35,5 @@ def get_default_engine() -> TTSEngine:
     """Instantiate the TTS engine selected by the TTS_ENGINE env var."""
     name = os.environ.get("TTS_ENGINE", _DEFAULT_ENGINE).lower()
     if name not in _REGISTRY:
-        raise ValueError(
-            f"Unknown TTS_ENGINE '{name}'. Choose one of: {', '.join(_REGISTRY)}."
-        )
+        raise ValueError(f"Unknown TTS_ENGINE '{name}'. Choose one of: {', '.join(_REGISTRY)}.")
     return _REGISTRY[name].from_env()

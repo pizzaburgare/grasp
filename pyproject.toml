@@ -77,10 +77,24 @@ markers = [
 "output/*/lesson.py" = ["F403", "F405"]
 
 
-[tool.ruff.lint]
-# Enable Pyflakes (F), pycodestyle (E, W), and isort (I)
-select = ["F", "E", "W", "I"]
-
 [tool.ruff]
 # Set the maximum line length to 130
 line-length = 130
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors (PEP 8 basics)
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (logical errors, unused imports)
+    "I",   # isort (automatically sorts imports)
+    "B",   # flake8-bugbear (flags common bugs and design problems)
+    "UP",  # pyupgrade (automatically updates syntax to modern Python)
+    "SIM", # flake8-simplify (suggests code simplifications)
+    "RUF", # Ruff-specific rules
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

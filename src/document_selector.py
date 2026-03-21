@@ -61,9 +61,7 @@ def _extract_markdown_frontmatter(text: str) -> dict[str, Any] | None:
 
 
 class _Selection(BaseModel):
-    files: list[str] = Field(
-        description="File paths relative to base_dir that are relevant to the topic."
-    )
+    files: list[str] = Field(description="File paths relative to base_dir that are relevant to the topic.")
 
 
 class DocumentSelectorAgent:
@@ -100,22 +98,11 @@ class DocumentSelectorAgent:
                 break
             for call in response.tool_calls:
                 fn = tool_map.get(call["name"])
-                result = (
-                    fn.invoke(call["args"]) if fn else f"Unknown tool: {call['name']}"
-                )
-                messages.append(
-                    ToolMessage(content=str(result), tool_call_id=call["id"])
-                )
+                result = fn.invoke(call["args"]) if fn else f"Unknown tool: {call['name']}"
+                messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
 
         structured = self._llm.with_structured_output(_Selection)
-        final: Any = structured.invoke(
-            messages
-            + [
-                HumanMessage(
-                    content=f"Now output the selected files for topic: {topic!r}."
-                )
-            ]
-        )
+        final: Any = structured.invoke([*messages, HumanMessage(content=f"Now output the selected files for topic: {topic!r}.")])
 
         return self._validate(final.files if final else []), usage
 
@@ -145,10 +132,7 @@ class DocumentSelectorAgent:
             if not target.exists():
                 return "Path does not exist."
             entries = sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name))
-            lines = [
-                f"{e.relative_to(base)}{'/' if e.is_dir() else f'  ({e.stat().st_size:,} bytes)'}"
-                for e in entries
-            ]
+            lines = [f"{e.relative_to(base)}{'/' if e.is_dir() else f'  ({e.stat().st_size:,} bytes)'}" for e in entries]
             return "\n".join(lines) or "Empty directory."
 
         @tool
@@ -230,6 +214,4 @@ if __name__ == "__main__":
     for path in selected:
         print(path)
     cost_str = f"${cost.cost_usd:.6f}" if cost.cost_usd is not None else "n/a"
-    print(
-        f"\nTokens: {cost.total_tokens} (prompt={cost.prompt_tokens}, completion={cost.completion_tokens})  cost={cost_str}"
-    )
+    print(f"\nTokens: {cost.total_tokens} (prompt={cost.prompt_tokens}, completion={cost.completion_tokens})  cost={cost_str}")

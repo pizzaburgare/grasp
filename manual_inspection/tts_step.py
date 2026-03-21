@@ -11,8 +11,8 @@ import os
 import sys
 import time
 
-from src.settings import DEFAULT_TTS_ENGINE  # noqa: E402
-from src.tts import available_engines  # noqa: E402
+from src.settings import DEFAULT_TTS_ENGINE
+from src.tts import available_engines
 
 ENGINES = available_engines()
 engine_name = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
@@ -28,7 +28,7 @@ print()
 
 # Device info is only relevant for torch-based engines
 if engine_name in ("qwen",):
-    import torch  # noqa: PLC0415
+    import torch
 
     print("1. Checking compute device...")
     if torch.cuda.is_available():

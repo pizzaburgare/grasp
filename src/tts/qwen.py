@@ -34,9 +34,7 @@ class QwenTTSEngine(TTSEngine):
         self.speaker = speaker
         self.language = language
         self.ref_audio = ref_audio  # required for base / voice-clone models
-        self.ref_text = (
-            ref_text  # optional transcript of ref_audio (improves clone quality)
-        )
+        self.ref_text = ref_text  # optional transcript of ref_audio (improves clone quality)
         self._model = None
 
     @classmethod
@@ -51,7 +49,7 @@ class QwenTTSEngine(TTSEngine):
 
     def _load_model(self):
         if self._model is None:
-            from qwen_tts import Qwen3TTSModel  # noqa: PLC0415 - lazy import
+            from qwen_tts import Qwen3TTSModel
 
             self._model = Qwen3TTSModel.from_pretrained(
                 self.model_id,

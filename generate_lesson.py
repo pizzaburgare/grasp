@@ -14,7 +14,7 @@ from pathlib import Path
 # Make project root importable when running directly as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.cli import main  # noqa: E402
+from src.cli import main
 
 if __name__ == "__main__":
     main()

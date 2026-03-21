@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import IO, Any, Optional
+from typing import IO, Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -193,7 +193,7 @@ class CourseWorkflow:
             )
 
         print("-" * 60)
-        print("TOTAL: " f"prompt={total_prompt}, completion={total_completion}, total={total_tokens}")
+        print(f"TOTAL: prompt={total_prompt}, completion={total_completion}, total={total_tokens}")
         if has_unknown_cost:
             print(f"TOTAL COST: {known_cost_total:.6f} USD + unknown")
         else:
@@ -214,8 +214,8 @@ class CourseWorkflow:
     def generate_lesson_plan(
         self,
         topic: str,
-        input_parts: Optional[list[dict[str, Any]]] = None,
-        input_files: Optional[list[str]] = None,
+        input_parts: list[dict[str, Any]] | None = None,
+        input_files: list[str] | None = None,
     ) -> str:
         print(f"Generating lesson plan for: {topic}")
         if input_files:
@@ -466,7 +466,7 @@ class CourseWorkflow:
     def run_full_pipeline(
         self,
         topic: str,
-        input_dir: Optional[str] = None,
+        input_dir: str | None = None,
         output_dir: str = "output",
         final_quality: bool = False,
         skip_review: bool = False,

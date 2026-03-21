@@ -188,7 +188,7 @@ class TestQwenTTSEngine:
 
         engine = QwenTTSEngine()
         with patch.object(engine, "_load_model", return_value=mock_raw_model):
-            audio, sr = engine.synthesize("Stereo test")
+            audio, _ = engine.synthesize("Stereo test")
 
         assert audio.ndim == 1
         assert len(audio) == SAMPLE_RATE
@@ -248,9 +248,7 @@ class TestPiperTTSEngine:
         from src.tts.piper import PiperTTSEngine
 
         engine = PiperTTSEngine(model_path="/fake/model.onnx")
-        with patch.object(
-            engine, "_load_voice", return_value=self._make_mock_voice(sr=16000)
-        ):
+        with patch.object(engine, "_load_voice", return_value=self._make_mock_voice(sr=16000)):
             _, sr = engine.synthesize("Rate test")
 
         assert sr == 16000

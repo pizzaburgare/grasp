@@ -20,8 +20,9 @@ import hashlib
 import json
 import re
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any
 
 from src.paths import CACHE_DIR
 
@@ -54,7 +55,7 @@ def _json_default(value: Any) -> str:
 
 def hash_context(
     topic: str,
-    input_dir: Optional[str] = None,
+    input_dir: str | None = None,
     *,
     extra_context: Mapping[str, Any] | None = None,
 ) -> str:
@@ -100,7 +101,7 @@ def hash_text(text: str, *, salt: str | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 
-def get_cached_script(lesson_name: str, context_hash: str) -> Optional[Path]:
+def get_cached_script(lesson_name: str, context_hash: str) -> Path | None:
     """Return the cached Manim script path if it exists, else ``None``."""
     p = get_lesson_cache_dir(lesson_name) / "script" / f"{context_hash}.py"
     return p if p.exists() else None
@@ -124,7 +125,7 @@ def get_audio_cache_dir(lesson_name: str) -> Path:
     return get_lesson_cache_dir(lesson_name) / "audio"
 
 
-def get_cached_audio(lesson_name: str, text: str, *, salt: str | None = None) -> Optional[Path]:
+def get_cached_audio(lesson_name: str, text: str, *, salt: str | None = None) -> Path | None:
     """Return the cached WAV path for *text* if it exists, else ``None``."""
     p = get_audio_cache_dir(lesson_name) / f"{hash_text(text, salt=salt)}.wav"
     return p if p.exists() else None
@@ -149,7 +150,7 @@ def save_audio_to_cache(
 # ---------------------------------------------------------------------------
 
 
-def get_cached_video(lesson_name: str, context_hash: str) -> Optional[Path]:
+def get_cached_video(lesson_name: str, context_hash: str) -> Path | None:
     """Return the cached rendered video path if it exists, else ``None``."""
     p = get_lesson_cache_dir(lesson_name) / "video" / f"{context_hash}.mp4"
     return p if p.exists() else None

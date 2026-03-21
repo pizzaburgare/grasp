@@ -18,7 +18,7 @@ from diff_match_patch import diff_match_patch
 # ---------------------------------------------------------------------------
 
 
-def dump(*args):  # noqa: ANN001
+def dump(*args):
     """Debug printer (no-op in production)."""
 
 
@@ -114,10 +114,7 @@ class RelativeIndenter:
             else:
                 cur_indent = prev_indent + dent
 
-            if not non_indent.rstrip("\r\n"):
-                out_line = non_indent  # don't indent a blank line
-            else:
-                out_line = cur_indent + non_indent
+            out_line = non_indent if not non_indent.rstrip("\r\n") else cur_indent + non_indent
 
             output.append(out_line)
             prev_indent = cur_indent
@@ -135,7 +132,7 @@ class RelativeIndenter:
 
 
 def map_patches(texts, patches, debug):
-    search_text, replace_text, original_text = texts
+    search_text, _, original_text = texts
 
     dmp = diff_match_patch()
     dmp.Diff_Timeout = 5

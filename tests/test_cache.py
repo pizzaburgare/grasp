@@ -953,10 +953,12 @@ class TestRenderAndMergeVideoSelection:
 
         wf = self._make_workflow()
 
-        with patch.object(
-            wf,
-            "_run_command_with_spinner",
-            return_value=MagicMock(returncode=0),
+        with (
+            patch.object(
+                wf,
+                "_run_command_with_spinner",
+                return_value=MagicMock(returncode=0),
+            ),
+            pytest.raises(FileNotFoundError),
         ):
-            with pytest.raises(FileNotFoundError):
-                wf.render_and_merge(script, out_dir, "my-scene")
+            wf.render_and_merge(script, out_dir, "my-scene")

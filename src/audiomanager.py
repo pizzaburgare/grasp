@@ -115,8 +115,8 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
         _future = _executor.submit(engine.synthesize, text_to_speak)
         try:
             audio, sr = _future.result(timeout=TTS_SYNTHESIS_TIMEOUT_SECONDS)
-        except FuturesTimeoutError:
-            raise RuntimeError(f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s " f"({word_count} words)")
+        except FuturesTimeoutError as err:
+            raise RuntimeError(f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s ({word_count} words)") from err
 
     actual_duration = len(audio) / sr
     max_duration = word_count * TTS_MAX_SECONDS_PER_WORD
