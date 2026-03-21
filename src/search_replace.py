@@ -13,7 +13,6 @@ except ImportError:
 
 from diff_match_patch import diff_match_patch
 
-
 # ---------------------------------------------------------------------------
 # Stubs for aider-internal helpers
 # ---------------------------------------------------------------------------
@@ -32,9 +31,7 @@ class GitTemporaryDirectory:
         if git is not None:
             repo = git.Repo.init(dname)
             repo.config_writer().set_value("user", "name", "aider").release()
-            repo.config_writer().set_value(
-                "user", "email", "aider@example.com"
-            ).release()
+            repo.config_writer().set_value("user", "email", "aider@example.com").release()
         return dname
 
     def __exit__(self, *args):
@@ -314,9 +311,7 @@ def diff_lines(search_text, replace_text):
     dmp = diff_match_patch()
     dmp.Diff_Timeout = 5
 
-    search_lines, replace_lines, mapping = dmp.diff_linesToChars(
-        search_text, replace_text
-    )
+    search_lines, replace_lines, mapping = dmp.diff_linesToChars(search_text, replace_text)
 
     diff_lines_ = dmp.diff_main(search_lines, replace_lines, False)
     dmp.diff_cleanupSemantic(diff_lines_)

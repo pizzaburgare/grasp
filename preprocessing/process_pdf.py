@@ -10,15 +10,14 @@ from markitdown import MarkItDown
 from pydantic import SecretStr
 
 from src.llm_metrics import extract_llm_usage
+from src.paths import PDF_TRANSCRIBER_PROMPT
 
 
 def strip_outer_markdown_fence(text: str) -> str:
     """Removes a single outer ```md/```markdown fence wrapper if present."""
     stripped = text.strip()
     lines = stripped.splitlines()
-    if len(lines) >= 2 and re.fullmatch(
-        r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE
-    ):
+    if len(lines) >= 2 and re.fullmatch(r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE):
         if lines[-1].strip() == "```":
             return "\n".join(lines[1:-1]).strip()
     return stripped
@@ -81,10 +80,10 @@ def pdf_to_md_llm(
     with open(input_path, "rb") as f:
         encoded = base64.standard_b64encode(f.read()).decode("utf-8")
 
+    transcriber_prompt = PDF_TRANSCRIBER_PROMPT.read_text(encoding="utf-8")
+
     messages = [
-        SystemMessage(
-            content="You are a helpful assistant that transcribes documents."
-        ),
+        SystemMessage(content="You are a helpful assistant that transcribes documents."),
         HumanMessage(
             content=[
                 {
@@ -96,7 +95,7 @@ def pdf_to_md_llm(
                 },
                 {
                     "type": "text",
-                    "text": "You are an expert academic transcriber. Your task is to accurately transcribe all pages of the provided PDF into clean, well-structured Markdown. Follow these strict guidelines:\n\n1. Structure & Formatting: Preserve the original logical hierarchy. Use standard Markdown for headings (##, ###), bullet points, bolding, and italics. Ignore irrelevant page headers, footers, or page numbers.\n2. Math & Science (LaTeX): Use LaTeX for all mathematical equations, scientific formulas, and complex symbols. Strictly use `$` for inline equations (e.g., $E=mc^2$) and `$$` for block/display equations. Do not leave spaces between the delimiters and the math.\n3. Exams & Exercises: Carefully preserve all question numbers, sub-questions (a, b, c), multiple-choice options, and point/mark allocations.\n4. Tables & Visuals: Format tabular data into standard Markdown tables. If you encounter a graph, diagram, or image, do not attempt to draw it; instead, insert a descriptive placeholder like `[Image: Brief description of the graph/diagram]`.\n5. Handwriting/Illegibility: If transcribing handwritten notes and a word or phrase is completely unreadable, insert `[illegible]` rather than guessing.\n6. Output: Provide ONLY the final Markdown transcription. Do not include any conversational filler, introductions, or conclusions.",
+                    "text": transcriber_prompt,
                 },
             ]
         ),

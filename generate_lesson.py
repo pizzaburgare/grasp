@@ -5,6 +5,7 @@ Usage:
   uv run lesson "LU Decomposition"
   uv run lesson "Fourier Transform" --input-dir ./slides --model google/gemini-3.1-pro-preview
   uv run lesson "QR Decomposition" --final
+  uv run lesson "IEEE Double precicion" --input-dir ./courses/FMNF05/IEEE --final --skip-review
 """
 
 import sys

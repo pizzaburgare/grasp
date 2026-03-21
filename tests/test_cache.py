@@ -59,10 +59,7 @@ class TestLessonNameToKey:
     def test_special_chars_stripped(self):
         from src.cache import lesson_name_to_key
 
-        assert (
-            lesson_name_to_key("Eigenvalues & Eigenvectors!")
-            == "eigenvalues-eigenvectors"
-        )
+        assert lesson_name_to_key("Eigenvalues & Eigenvectors!") == "eigenvalues-eigenvectors"
 
     def test_already_slug_unchanged(self):
         from src.cache import lesson_name_to_key
@@ -77,9 +74,7 @@ class TestLessonNameToKey:
     def test_different_names_produce_different_keys(self):
         from src.cache import lesson_name_to_key
 
-        assert lesson_name_to_key("Fourier Transform") != lesson_name_to_key(
-            "LU Decomposition"
-        )
+        assert lesson_name_to_key("Fourier Transform") != lesson_name_to_key("LU Decomposition")
 
     def test_same_input_deterministic(self):
         from src.cache import lesson_name_to_key
@@ -568,9 +563,7 @@ class TestCreateWavAudioCache:
         cache_bytes = (cache_dir / f"{text_hash}.wav").read_bytes()
         assert out_bytes == cache_bytes
 
-    def test_same_text_different_engine_config_uses_separate_cache_entries(
-        self, tmp_path, monkeypatch
-    ):
+    def test_same_text_different_engine_config_uses_separate_cache_entries(self, tmp_path, monkeypatch):
         """Changing TTS config for same text should not reuse stale cached audio."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -658,9 +651,7 @@ class TestWorkflowCacheIntegration:
         monkeypatch.setenv("TTS_ENGINE", "kokoro")
         return cache
 
-    def test_video_cache_hit_skips_llm_and_render(
-        self, tmp_path, patched_cache_dir, monkeypatch
-    ):
+    def test_video_cache_hit_skips_llm_and_render(self, tmp_path, patched_cache_dir, monkeypatch):
         """If a cached video exists the pipeline copies it and returns immediately."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -695,12 +686,10 @@ class TestWorkflowCacheIntegration:
         assert final.read_bytes() == b"cached video bytes"
         assert result["cache_hit"] == "video"
 
-    def test_script_cache_hit_skips_script_generation(
-        self, tmp_path, patched_cache_dir, monkeypatch
-    ):
+    def test_script_cache_hit_skips_script_generation(self, tmp_path, patched_cache_dir, monkeypatch):
         """If a cached script exists neither the script LLM nor the lesson-plan LLM is called."""
-        from src.workflow import CourseWorkflow
         from src.cache import hash_context
+        from src.workflow import CourseWorkflow
 
         topic = "Fourier Transform"
         slug = "fourier-transform"
@@ -739,9 +728,7 @@ class TestWorkflowCacheIntegration:
         wf.script_generator.generate_and_save.assert_not_called()  # script is skipped
         mock_render.assert_called_once()  # render still runs
 
-    def test_fresh_run_render_called_with_lesson_name_and_hash(
-        self, tmp_path, patched_cache_dir
-    ):
+    def test_fresh_run_render_called_with_lesson_name_and_hash(self, tmp_path, patched_cache_dir):
         """On a cache miss render_and_merge receives lesson_name and context_hash."""
         from src.workflow import CourseWorkflow
 
@@ -752,9 +739,7 @@ class TestWorkflowCacheIntegration:
 
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan", return_value="# plan"),
-            patch.object(
-                CourseWorkflow, "render_and_merge", return_value=fake_video
-            ) as mock_render,
+            patch.object(CourseWorkflow, "render_and_merge", return_value=fake_video) as mock_render,
             patch("src.cache.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
@@ -763,9 +748,7 @@ class TestWorkflowCacheIntegration:
                 path = kwargs.get("output_path")
                 if path:
                     Path(path).parent.mkdir(parents=True, exist_ok=True)
-                    Path(path).write_text(
-                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
-                    )
+                    Path(path).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
@@ -780,9 +763,7 @@ class TestWorkflowCacheIntegration:
         # Iterative renders use context_hash=None; caching happens via save_video_to_cache
         assert kwargs.get("context_hash") is None
 
-    def test_lesson_plan_stored_alongside_script_as_md(
-        self, tmp_path, patched_cache_dir
-    ):
+    def test_lesson_plan_stored_alongside_script_as_md(self, tmp_path, patched_cache_dir):
         """Lesson plan is written as {hash}.md next to {hash}.py in script/."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -792,9 +773,7 @@ class TestWorkflowCacheIntegration:
         out_dir = tmp_path / "output"
 
         with (
-            patch.object(
-                CourseWorkflow, "generate_lesson_plan", return_value="# my plan"
-            ),
+            patch.object(CourseWorkflow, "generate_lesson_plan", return_value="# my plan"),
             patch.object(
                 CourseWorkflow,
                 "render_and_merge",
@@ -813,9 +792,7 @@ class TestWorkflowCacheIntegration:
                 path = kwargs.get("output_path")
                 if path:
                     Path(path).parent.mkdir(parents=True, exist_ok=True)
-                    Path(path).write_text(
-                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
-                    )
+                    Path(path).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
@@ -898,9 +875,7 @@ class TestRenderAndMergeVideoSelection:
 
         # Fake script with a Scene subclass
         script = tmp_path / "scene.py"
-        script.write_text(
-            "from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n"
-        )
+        script.write_text("from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n")
 
         wf = self._make_workflow()
 
@@ -926,9 +901,7 @@ class TestRenderAndMergeVideoSelection:
             with patch("shutil.copy2", side_effect=fake_copy):
                 wf.render_and_merge(script, out_dir, "new-scene")
 
-        assert copied["src"] == new_mp4, (
-            f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
-        )
+        assert copied["src"] == new_mp4, f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
 
     def test_single_mp4_is_always_selected(self, tmp_path, monkeypatch):
         """When only one MP4 exists it must be picked regardless of mtime."""
@@ -943,9 +916,7 @@ class TestRenderAndMergeVideoSelection:
         self._write_mp4(only_mp4)
 
         script = tmp_path / "scene.py"
-        script.write_text(
-            "from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n"
-        )
+        script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
 
         wf = self._make_workflow()
 
@@ -978,9 +949,7 @@ class TestRenderAndMergeVideoSelection:
         self._write_mp4(partial)
 
         script = tmp_path / "scene.py"
-        script.write_text(
-            "from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n"
-        )
+        script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
 
         wf = self._make_workflow()
 

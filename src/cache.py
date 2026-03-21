@@ -25,7 +25,6 @@ from typing import Any, Mapping, Optional
 
 from src.paths import CACHE_DIR
 
-
 # ---------------------------------------------------------------------------
 # Lesson key / directory helpers
 # ---------------------------------------------------------------------------
@@ -107,9 +106,7 @@ def get_cached_script(lesson_name: str, context_hash: str) -> Optional[Path]:
     return p if p.exists() else None
 
 
-def save_script_to_cache(
-    lesson_name: str, context_hash: str, script_path: Path
-) -> Path:
+def save_script_to_cache(lesson_name: str, context_hash: str, script_path: Path) -> Path:
     """Copy *script_path* into the script cache and return the destination path."""
     dest = get_lesson_cache_dir(lesson_name) / "script" / f"{context_hash}.py"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -127,9 +124,7 @@ def get_audio_cache_dir(lesson_name: str) -> Path:
     return get_lesson_cache_dir(lesson_name) / "audio"
 
 
-def get_cached_audio(
-    lesson_name: str, text: str, *, salt: str | None = None
-) -> Optional[Path]:
+def get_cached_audio(lesson_name: str, text: str, *, salt: str | None = None) -> Optional[Path]:
     """Return the cached WAV path for *text* if it exists, else ``None``."""
     p = get_audio_cache_dir(lesson_name) / f"{hash_text(text, salt=salt)}.wav"
     return p if p.exists() else None

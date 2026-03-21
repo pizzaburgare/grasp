@@ -20,11 +20,11 @@ import io
 import sys
 from pathlib import Path
 
-import numpy as np
+import matplotlib.gridspec as gridspec  # type: ignore
+import matplotlib.pyplot as plt  # type: ignore
+import numpy as np  # type: ignore
+from matplotlib.widgets import Button  # type: ignore
 from PIL import Image
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from matplotlib.widgets import Button
 
 from src.script_generator import ManimScriptGenerator, VideoReview
 
@@ -71,9 +71,7 @@ def run_review(
 
     gen = ManimScriptGenerator()
 
-    structured_llm = gen.review_llm.with_structured_output(
-        VideoReview, include_raw=True
-    )
+    structured_llm = gen.review_llm.with_structured_output(VideoReview, include_raw=True)
     review_text = f"Topic: {topic}\n\n{gen.review_prompt_template}"
     sys_msg = SystemMessage(content=gen.system_prompt)
 
@@ -85,9 +83,7 @@ def run_review(
             img_part,
         ]
         try:
-            result = structured_llm.invoke(
-                [sys_msg, HumanMessage(content=user_content)]
-            )
+            result = structured_llm.invoke([sys_msg, HumanMessage(content=user_content)])
             review: VideoReview = result["parsed"]  # type: ignore[index]
             reviews.append(review)
             if review.has_issues:
@@ -329,9 +325,7 @@ class FrameViewer:
             self.sim_text.set_color(color)
 
         # Header
-        self.hdr_text.set_text(
-            f"Frame Inspector  •  {self.idx + 1} of {self.n}  •  ← / → to navigate"
-        )
+        self.hdr_text.set_text(f"Frame Inspector  •  {self.idx + 1} of {self.n}  •  ← / → to navigate")
 
         # Review panel
         if self.review_text_obj is not None and self.reviews is not None:
@@ -358,9 +352,7 @@ class FrameViewer:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Inspect video frames (and optionally run the review LLM)."
-    )
+    parser = argparse.ArgumentParser(description="Inspect video frames (and optionally run the review LLM).")
     parser.add_argument("video", type=Path, help="Path to the .mp4 video file.")
     parser.add_argument(
         "--review",
@@ -390,9 +382,7 @@ def main() -> None:
         if not raw:
             print("No still frames found.")
             sys.exit(1)
-        frames = [
-            (f"Frame at {ManimScriptGenerator._format_timestamp(t)}", f) for t, f in raw
-        ]
+        frames = [(f"Frame at {ManimScriptGenerator._format_timestamp(t)}", f) for t, f in raw]
         print(f"{len(frames)} still frames found (no SSIM dedup, no target limit).")
         FrameViewer(frames)
         return

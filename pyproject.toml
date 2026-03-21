@@ -75,3 +75,12 @@ markers = [
 # Manim scenes use `from manim import *` by convention
 ".cache/scripts/lesson.py" = ["F403", "F405"]
 "output/*/lesson.py" = ["F403", "F405"]
+
+
+[tool.ruff.lint]
+# Enable Pyflakes (F), pycodestyle (E, W), and isort (I)
+select = ["F", "E", "W", "I"]
+
+[tool.ruff]
+# Set the maximum line length to 130
+line-length = 130

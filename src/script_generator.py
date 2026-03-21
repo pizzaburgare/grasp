@@ -30,9 +30,7 @@ _REVIEW_TARGET_FRAMES = 50
 _REVIEW_FRAME_QUALITY = 70
 # Dense scan settings for scene-change detection
 _SCENE_SCAN_INTERVAL = 0.5  # seconds between scan samples
-_SCENE_SETTLE_THRESHOLD = (
-    0.01  # max mean absolute pixel difference to count as "settled"
-)
+_SCENE_SETTLE_THRESHOLD = 0.01  # max mean absolute pixel difference to count as "settled"
 
 
 # ---------------------------------------------------------------------------
@@ -62,21 +60,11 @@ def _frame_ssim(a: np.ndarray, b: np.ndarray) -> float:
 class VideoReview(BaseModel):
     """Structured result from the video review agent."""
 
-    text_clipped: bool = Field(
-        description="Text or equations are clipped / cut off at the frame edges."
-    )
-    overlapping_content: bool = Field(
-        description="Content overlaps or is rendered unreadably on top of other content."
-    )
-    broken_animations: bool = Field(
-        description="Visual artifacts, glitches, or misplaced objects are visible."
-    )
-    content_overflow: bool = Field(
-        description="Content extends outside the visible frame boundary."
-    )
-    latex_rendering: bool = Field(
-        description="LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations)."
-    )
+    text_clipped: bool = Field(description="Text or equations are clipped / cut off at the frame edges.")
+    overlapping_content: bool = Field(description="Content overlaps or is rendered unreadably on top of other content.")
+    broken_animations: bool = Field(description="Visual artifacts, glitches, or misplaced objects are visible.")
+    content_overflow: bool = Field(description="Content extends outside the visible frame boundary.")
+    latex_rendering: bool = Field(description="LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations).")
     notes: Optional[str] = Field(
         default=None,
         description="Optional 4-8 word description of the problem(s) found. Only set when at least one criterion is true.",
@@ -108,18 +96,14 @@ class VideoReview(BaseModel):
 class CodeEdit(BaseModel):
     """A single search/replace edit to apply to the script."""
 
-    old_code: str = Field(
-        description="Verbatim substring to find in the source (include 5+ lines of context)."
-    )
+    old_code: str = Field(description="Verbatim substring to find in the source (include 5+ lines of context).")
     new_code: str = Field(description="Replacement text.")
 
 
 class CodeFix(BaseModel):
     """Structured list of targeted edits from the fix agent."""
 
-    edits: list[CodeEdit] = Field(
-        description="Ordered list of search/replace edits to apply."
-    )
+    edits: list[CodeEdit] = Field(description="Ordered list of search/replace edits to apply.")
 
 
 class ManimScriptGenerator:
@@ -261,6 +245,11 @@ Generate a complete Manim script that:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
+        """Backward-compatible wrapper for frame similarity comparisons."""
+        return _frame_ssim(a, b)
+
+    @staticmethod
     def _format_timestamp(seconds: float) -> str:
         """Format *seconds* as ``H:MM:SS`` or ``M:SS`` (no milliseconds)."""
         total = int(seconds)
@@ -302,13 +291,7 @@ Generate a complete Manim script that:
                 next_t = min(t + _SCENE_SCAN_INTERVAL, duration)
                 next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
 
-                mae = float(
-                    np.mean(
-                        np.abs(
-                            curr_frame.astype(np.int16) - next_frame.astype(np.int16)
-                        )
-                    )
-                )
+                mae = float(np.mean(np.abs(curr_frame.astype(np.int16) - next_frame.astype(np.int16))))
                 if mae <= _SCENE_SETTLE_THRESHOLD:  # settled
                     if t - last_kept_t >= 1.0:  # 1 s gap
                         if float(np.std(curr_frame)) >= 2.0:  # not blank
@@ -348,7 +331,7 @@ Generate a complete Manim script that:
         # ----------------------------------------------------------
         deduped: list[tuple[float, np.ndarray]] = [candidates[0]]
         for ts, frame in candidates[1:]:
-            if _frame_ssim(deduped[-1][1], frame) < 0.99:
+            if ManimScriptGenerator._frame_similarity(deduped[-1][1], frame) < 0.99:
                 deduped.append((ts, frame))
 
         # ----------------------------------------------------------
@@ -356,12 +339,7 @@ Generate a complete Manim script that:
         # ----------------------------------------------------------
         if len(deduped) > _REVIEW_TARGET_FRAMES:
             step = len(deduped) / _REVIEW_TARGET_FRAMES
-            indices = list(
-                dict.fromkeys(
-                    min(round(i * step), len(deduped) - 1)
-                    for i in range(_REVIEW_TARGET_FRAMES)
-                )
-            )
+            indices = list(dict.fromkeys(min(round(i * step), len(deduped) - 1) for i in range(_REVIEW_TARGET_FRAMES)))
             deduped = [deduped[i] for i in indices]
 
         # ----------------------------------------------------------
@@ -409,9 +387,7 @@ Generate a complete Manim script that:
 
         print(f"  Reviewing {len(frames)} unique frames one-by-one ...")
 
-        structured_llm = self.review_llm.with_structured_output(
-            VideoReview, include_raw=True
-        )
+        structured_llm = self.review_llm.with_structured_output(VideoReview, include_raw=True)
         review_text = f"Topic: {topic}\n\n{self.review_prompt_template}"
         sys_msg = SystemMessage(content=self.system_prompt)
 
@@ -425,15 +401,12 @@ Generate a complete Manim script that:
                 {"type": "text", "text": label},
                 img_part,
             ]
-            result = structured_llm.invoke(
-                [sys_msg, HumanMessage(content=user_content)]
-            )
+            result = structured_llm.invoke([sys_msg, HumanMessage(content=user_content)])
             review: VideoReview = result["parsed"]  # type: ignore[index]
             usage = extract_llm_usage(result["raw"])  # type: ignore[index]
             total_usage = LLMUsage(
                 prompt_tokens=total_usage.prompt_tokens + usage.prompt_tokens,
-                completion_tokens=total_usage.completion_tokens
-                + usage.completion_tokens,
+                completion_tokens=total_usage.completion_tokens + usage.completion_tokens,
                 total_tokens=total_usage.total_tokens + usage.total_tokens,
                 cost_usd=(total_usage.cost_usd or 0) + (usage.cost_usd or 0) or None,
             )
@@ -459,19 +432,12 @@ Generate a complete Manim script that:
                 all_failed[c] = None
         all_failed_list = list(all_failed)
 
-        print(
-            f"  Video review: {len(flagged)}/{len(frames)} frames flagged, "
-            f"{len(all_failed_list)} unique criteria failed:"
-        )
+        print(f"  Video review: {len(flagged)}/{len(frames)} frames flagged, " f"{len(all_failed_list)} unique criteria failed:")
         for criterion in all_failed_list:
             print(f"    \u2022 {criterion}")
 
-        flagged_frames = [
-            (label, img_part, notes) for label, img_part, _, notes in flagged
-        ]
-        fixed_script = self._fix_visual_issues(
-            script, all_failed_list, flagged_frames, topic
-        )
+        flagged_frames = [(label, img_part, notes) for label, img_part, _, notes in flagged]
+        fixed_script = self._fix_visual_issues(script, all_failed_list, flagged_frames, topic)
         return fixed_script, True
 
     def _fix_visual_issues(
@@ -515,20 +481,14 @@ Generate a complete Manim script that:
         result = script if script.endswith("\n") else script + "\n"
         applied = 0
         for edit in fix.edits:
-            search = (
-                edit.old_code if edit.old_code.endswith("\n") else edit.old_code + "\n"
-            )
-            replace = (
-                edit.new_code if edit.new_code.endswith("\n") else edit.new_code + "\n"
-            )
+            search = edit.old_code if edit.old_code.endswith("\n") else edit.old_code + "\n"
+            replace = edit.new_code if edit.new_code.endswith("\n") else edit.new_code + "\n"
             patched = flexible_search_and_replace((search, replace, result))
             if patched is not None:
                 result = patched
                 applied += 1
             else:
-                print(
-                    f"  Warning: edit could not be applied - skipping: {edit.old_code[:60]!r}"
-                )
+                print(f"  Warning: edit could not be applied - skipping: {edit.old_code[:60]!r}")
 
         print(f"  Applied {applied}/{len(fix.edits)} edits from fix agent.")
         return self._clean_code_output(result)

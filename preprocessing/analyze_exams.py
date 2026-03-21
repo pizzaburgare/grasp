@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
+from src.paths import EXAM_CLASSIFIER_PROMPT
+
 
 def create_agent(model: str = "google/gemini-2.0-flash-001") -> ChatOpenAI:
     load_dotenv()
@@ -46,9 +48,7 @@ def parse_llm_list(llm_output: str) -> list[str]:
         try:
             return ast.literal_eval(cleaned)
         except (SyntaxError, ValueError):
-            print(
-                "Warning: Could not parse topic list as JSON/Python. Falling back to comma split."
-            )
+            print("Warning: Could not parse topic list as JSON/Python. Falling back to comma split.")
             return [t.strip() for t in cleaned.split(",") if t.strip()]
 
 
@@ -81,23 +81,9 @@ def extract_topics(exam_dir: str, llm: ChatOpenAI) -> list[str]:
     return parse_llm_list(raw_response)
 
 
-def classify_exams(
-    exam_dir: str, topics: list[str], llm: ChatOpenAI
-) -> dict[str, list[str]]:
+def classify_exams(exam_dir: str, topics: list[str], llm: ChatOpenAI) -> dict[str, list[str]]:
     """For each exam, ask the LLM which topics from the master list appear in it."""
-    classification_prompt = """\
-Here is the master list of possible exam topics:
-{topics_list}
-
-Please analyze the following exam content. Identify WHICH of the exact topics from the list above appear in this exam as a major part of a question.
-
-IMPORTANT:
-1. Only use topics from the provided list. Do not invent new ones.
-2. Output a valid JSON object as {{"yyyy-mm-dd": ["Topic A", "Topic B"]}} where the key is the filename stem (without extension) and the value is a list of matching topics.
-
-Exam Content:
-{exam_content}
-"""
+    classification_prompt = EXAM_CLASSIFIER_PROMPT.read_text(encoding="utf-8")
 
     results: dict[str, list[str]] = {}
 
@@ -131,9 +117,7 @@ Exam Content:
     return results
 
 
-def invert_to_topic_map(
-    exam_topic_map: dict[str, list[str]], all_topics: list[str]
-) -> dict[str, list[str]]:
+def invert_to_topic_map(exam_topic_map: dict[str, list[str]], all_topics: list[str]) -> dict[str, list[str]]:
     """Invert {exam_stem: [topics]} → {topic: [exam_dates]}."""
     # Exam stems are like "2024_08_21"; convert to "2024-08-21"
     result: dict[str, list[str]] = {topic: [] for topic in all_topics}
@@ -159,9 +143,7 @@ def sort_by_frequency(topic_map: dict[str, list[str]]) -> dict[str, int]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Analyze past exams and produce a topic → exam-dates mapping."
-    )
+    parser = argparse.ArgumentParser(description="Analyze past exams and produce a topic → exam-dates mapping.")
     parser.add_argument(
         "exam_dir",
         type=Path,

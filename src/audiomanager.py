@@ -1,7 +1,8 @@
 import os
 import shutil
 import wave
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from pathlib import Path
 
 import numpy as np
@@ -9,13 +10,14 @@ from dotenv import load_dotenv
 from manim import Scene
 
 from src.cache import hash_text
-from .tts import TTSEngine, get_default_engine
 from src.paths import CACHE_AUDIO_DIR
 from src.settings import (
     AUDIO_DURATION_BUFFER_SECONDS,
     TTS_MAX_SECONDS_PER_WORD,
     TTS_SYNTHESIS_TIMEOUT_SECONDS,
 )
+
+from .tts import TTSEngine, get_default_engine
 
 load_dotenv()
 
@@ -106,9 +108,7 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
         if cached_wav.exists():
             shutil.copy2(cached_wav, out_path)
             with wave.open(str(out_path), "rb") as wf:
-                return (
-                    wf.getnframes() / wf.getframerate()
-                ) + AUDIO_DURATION_BUFFER_SECONDS
+                return (wf.getnframes() / wf.getframerate()) + AUDIO_DURATION_BUFFER_SECONDS
 
     word_count = max(len(text_to_speak.split()), 1)
     with ThreadPoolExecutor(max_workers=1) as _executor:
@@ -116,10 +116,7 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
         try:
             audio, sr = _future.result(timeout=TTS_SYNTHESIS_TIMEOUT_SECONDS)
         except FuturesTimeoutError:
-            raise RuntimeError(
-                f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s "
-                f"({word_count} words)"
-            )
+            raise RuntimeError(f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s " f"({word_count} words)")
 
     actual_duration = len(audio) / sr
     max_duration = word_count * TTS_MAX_SECONDS_PER_WORD
@@ -167,9 +164,7 @@ class AudioManager:
 
         _audio_log("AudioManager: Done saying text")
         time_since_started = self.scene.renderer.time - self.times[-1]
-        _audio_log(
-            f"AudioManager: Time since started saying text: {time_since_started:.2f} seconds"
-        )
+        _audio_log(f"AudioManager: Time since started saying text: {time_since_started:.2f} seconds")
         to_sleep = self.audio_durations[-1] - time_since_started
         if to_sleep > 0:
             _audio_log(f"AudioManager: Sleeping for {to_sleep:.2f} seconds")
@@ -207,9 +202,7 @@ class AudioManager:
                 if start_frame >= len(audio_data):
                     continue
                 end_frame = min(start_frame + len(audio_chunk), len(audio_data))
-                audio_data[start_frame:end_frame] = audio_chunk[
-                    : end_frame - start_frame
-                ]
+                audio_data[start_frame:end_frame] = audio_chunk[: end_frame - start_frame]
 
         merged_path = audio_dir / "merged_audio.wav"
         with wave.open(str(merged_path), "wb") as wav_file:

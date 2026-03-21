@@ -13,7 +13,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -162,6 +161,7 @@ class TestGenerateLessonPlanFileLog:
 
     def _make_workflow(self):
         from unittest.mock import MagicMock, patch
+
         from src.workflow import CourseWorkflow
 
         with (

@@ -51,14 +51,15 @@ def extract_topic(pdf_path, target_topic):
         safe_name = re.sub(r'[\\/*?:"<>|]', "", topics[idx]["title"]).strip()
         new_doc.save(f"{safe_name}.pdf")
         new_doc.close()
-        print(f"✅ Saved: {safe_name}.pdf (Pages {start+1}-{end})")
+        print(f"✅ Saved: {safe_name}.pdf (Pages {start + 1}-{end})")
 
 
 if __name__ == "__main__":
     FILE = "courses/FMNF05/lectures/slides.pdf"
     if len(sys.argv) < 2:
         print(
-            "Usage:\n uv run preprocessing/extract_from_pdf.py --get-topics\n  uv run preprocessing/extract_from_pdf.py <topic_keyword>"
+            "Usage:\n uv run preprocessing/extract_from_pdf.py --get-topics"
+            "uv run preprocessing/extract_from_pdf.py <topic_keyword>"
         )
     elif sys.argv[1] == "--get-topics":
         for t in get_toc_topics(FILE):

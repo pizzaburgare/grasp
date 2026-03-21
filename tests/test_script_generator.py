@@ -7,7 +7,6 @@ import pytest
 
 from src.script_generator import ManimScriptGenerator
 
-
 # ---------------------------------------------------------------------------
 # _frame_similarity
 # ---------------------------------------------------------------------------
@@ -24,9 +23,7 @@ class TestFrameSimilarity:
 
     def test_identical_frames_return_one(self):
         frame = self._make_dark_frame()
-        assert ManimScriptGenerator._frame_similarity(frame, frame) == pytest.approx(
-            1.0
-        )
+        assert ManimScriptGenerator._frame_similarity(frame, frame) == pytest.approx(1.0)
 
     def test_completely_different_frames(self):
         black = self._make_dark_frame()
@@ -53,8 +50,7 @@ class TestFrameSimilarity:
         sim = ManimScriptGenerator._frame_similarity(frame_a, frame_b)
         # Must be below the dedup threshold so both frames are kept
         assert sim < 0.95, (
-            f"Similarity {sim:.4f} >= 0.95; small content changes on a dark "
-            "background are being hidden by the metric"
+            f"Similarity {sim:.4f} >= 0.95; small content changes on a dark " "background are being hidden by the metric"
         )
 
     def test_same_content_same_position_is_similar(self):
@@ -118,9 +114,7 @@ class TestExtractVideoFrames:
         from pathlib import Path
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
-        assert len(parts) > 1, (
-            f"Only {len(parts)} frame(s) extracted from {len(frames)} distinct frames"
-        )
+        assert len(parts) > 1, f"Only {len(parts)} frame(s) extracted from {len(frames)} distinct frames"
         # Each entry is (label, image_part)
         for label, img_part in parts:
             assert isinstance(label, str)
