@@ -28,3 +28,23 @@ MANIM_GENERATOR_MODEL: str = os.getenv("MANIM_GENERATOR_MODEL", DEFAULT_LLM_MODE
 VIDEO_REVIEW_MODEL: str = os.getenv("VIDEO_REVIEW_MODEL", DEFAULT_LLM_MODEL)
 VIDEO_FIX_MODEL: str = os.getenv("VIDEO_FIX_MODEL", DEFAULT_LLM_MODEL)
 DOCUMENT_SELECTOR_MODEL: str = os.getenv("DOCUMENT_SELECTOR_MODEL", DEFAULT_LLM_MODEL)
+
+
+def tts_config_fingerprint(tts_engine: str) -> dict[str, str]:
+    """Return env vars that materially affect the selected TTS output."""
+    keys_by_engine: dict[str, tuple[str, ...]] = {
+        "qwen": (
+            "QWEN_TTS_MODEL",
+            "QWEN_TTS_SPEAKER",
+            "QWEN_TTS_LANGUAGE",
+            "QWEN_TTS_REF_AUDIO",
+            "QWEN_TTS_REF_TEXT",
+        ),
+        "piper": ("PIPER_MODEL",),
+        "kokoro": ("KOKORO_VOICE", "KOKORO_LANG_CODE", "KOKORO_SPEED"),
+    }
+    keys = keys_by_engine.get(tts_engine, ())
+    return {
+        "engine": tts_engine,
+        **{key: os.environ.get(key, "") for key in keys},
+    }

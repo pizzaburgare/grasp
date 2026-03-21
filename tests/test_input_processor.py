@@ -201,5 +201,5 @@ class TestGenerateLessonPlanFileLog:
 
     def test_returns_response_content(self) -> None:
         wf = self._make_workflow()
-        result = wf.generate_lesson_plan("LU Decomposition")
-        assert result == "Lesson plan content"
+        lesson, _ = wf.generate_lesson_plan("LU Decomposition")
+        assert lesson == "Lesson plan content"
