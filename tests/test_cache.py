@@ -674,7 +674,7 @@ class TestWorkflowCacheIntegration:
 
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan") as mock_plan,
-            patch.object(CourseWorkflow, "render_and_merge") as mock_render,
+            patch("src.workflow.render_and_merge") as mock_render,
         ):
             wf = CourseWorkflow(model="test-model")
             video_hash = hash_context(
@@ -712,9 +712,8 @@ class TestWorkflowCacheIntegration:
         _cached_script = "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan") as mock_plan,
-            patch.object(
-                CourseWorkflow,
-                "render_and_merge",
+            patch(
+                "src.workflow.render_and_merge",
                 return_value=out_dir / "fourier-transform.mp4",
             ) as mock_render,
             patch("src.workflow.save_video_to_cache"),
@@ -752,7 +751,7 @@ class TestWorkflowCacheIntegration:
 
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# plan", LLMUsage())),
-            patch.object(CourseWorkflow, "render_and_merge", return_value=fake_video) as mock_render,
+            patch("src.workflow.render_and_merge", return_value=fake_video) as mock_render,
             patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
@@ -789,9 +788,8 @@ class TestWorkflowCacheIntegration:
 
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# my plan", LLMUsage())),
-            patch.object(
-                CourseWorkflow,
-                "render_and_merge",
+            patch(
+                "src.workflow.render_and_merge",
                 return_value=out_dir / f"{slug}.mp4",
             ),
             patch("src.workflow.save_video_to_cache"),
@@ -876,8 +874,8 @@ class TestRenderAndMergeVideoSelection:
         audio_dir = tmp_path / "audio"
         out_dir = tmp_path / "output"
 
-        monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
-        monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
+        monkeypatch.setattr("src.rendering.CACHE_MANIM_DIR", manim_dir)
+        monkeypatch.setattr("src.rendering.CACHE_AUDIO_DIR", audio_dir)
 
         # Stale file written first (older mtime)
         old_mp4 = manim_dir / "videos" / "oldhash" / "480p15" / "OldScene.mp4"
@@ -894,17 +892,14 @@ class TestRenderAndMergeVideoSelection:
         script = tmp_path / "scene.py"
         script.write_text("from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n")
 
-        wf = self._make_workflow()
-
-        # Patch _run_command_with_spinner to be a no-op (render already "done")
+        # Patch run_command_with_spinner to be a no-op (render already "done")
         with (
-            patch.object(
-                wf,
-                "_run_command_with_spinner",
+            patch(
+                "src.rendering.run_command_with_spinner",
                 return_value=MagicMock(returncode=0),
             ),
-            patch("src.workflow.VideoFileClip"),
-            patch("src.workflow.AudioFileClip"),
+            patch("src.rendering.VideoFileClip"),
+            patch("src.rendering.AudioFileClip"),
         ):
             # No merged_audio.wav → takes the copy-without-audio path, so we only
             # care about which video_path was found; capture it via VideoFileClip arg.
@@ -916,7 +911,8 @@ class TestRenderAndMergeVideoSelection:
                 copied["src"] = Path(src)
 
             with patch("shutil.copy2", side_effect=fake_copy):
-                wf.render_and_merge(script, out_dir, "new-scene")
+                from src.rendering import render_and_merge
+                render_and_merge(script, out_dir, "new-scene")
 
         assert copied["src"] == new_mp4, f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
 
@@ -926,8 +922,8 @@ class TestRenderAndMergeVideoSelection:
         audio_dir = tmp_path / "audio"
         out_dir = tmp_path / "output"
 
-        monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
-        monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
+        monkeypatch.setattr("src.rendering.CACHE_MANIM_DIR", manim_dir)
+        monkeypatch.setattr("src.rendering.CACHE_AUDIO_DIR", audio_dir)
 
         only_mp4 = manim_dir / "videos" / "abc" / "480p15" / "MyScene.mp4"
         self._write_mp4(only_mp4)
@@ -935,11 +931,8 @@ class TestRenderAndMergeVideoSelection:
         script = tmp_path / "scene.py"
         script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
 
-        wf = self._make_workflow()
-
-        with patch.object(
-            wf,
-            "_run_command_with_spinner",
+        with patch(
+            "src.rendering.run_command_with_spinner",
             return_value=MagicMock(returncode=0),
         ):
             copied: dict[str, Path] = {}
@@ -948,7 +941,8 @@ class TestRenderAndMergeVideoSelection:
                 copied["src"] = Path(src)
 
             with patch("shutil.copy2", side_effect=fake_copy):
-                wf.render_and_merge(script, out_dir, "my-scene")
+                from src.rendering import render_and_merge
+                render_and_merge(script, out_dir, "my-scene")
 
         assert copied["src"] == only_mp4
 
@@ -958,8 +952,8 @@ class TestRenderAndMergeVideoSelection:
         audio_dir = tmp_path / "audio"
         out_dir = tmp_path / "output"
 
-        monkeypatch.setattr("src.workflow.CACHE_MANIM_DIR", manim_dir)
-        monkeypatch.setattr("src.workflow.CACHE_AUDIO_DIR", audio_dir)
+        monkeypatch.setattr("src.rendering.CACHE_MANIM_DIR", manim_dir)
+        monkeypatch.setattr("src.rendering.CACHE_AUDIO_DIR", audio_dir)
 
         # Only a partial_movie_files entry exists - no real output yet
         partial = manim_dir / "videos" / "abc" / "partial_movie_files" / "chunk.mp4"
@@ -968,14 +962,12 @@ class TestRenderAndMergeVideoSelection:
         script = tmp_path / "scene.py"
         script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
 
-        wf = self._make_workflow()
-
         with (
-            patch.object(
-                wf,
-                "_run_command_with_spinner",
+            patch(
+                "src.rendering.run_command_with_spinner",
                 return_value=MagicMock(returncode=0),
             ),
             pytest.raises(FileNotFoundError),
         ):
-            wf.render_and_merge(script, out_dir, "my-scene")
+            from src.rendering import render_and_merge
+            render_and_merge(script, out_dir, "my-scene")
