@@ -115,6 +115,7 @@ class TestQwenTTSEngine:
             text="Speaker test",
             language="English",
             speaker="Aiden",
+            temperature=0.7,
         )
 
     def test_returns_cpu_when_no_accelerator(self, monkeypatch: MonkeyPatch) -> None:
