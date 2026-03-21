@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from src.llm_metrics import extract_llm_usage
 
 
-def _extract_audio(video_path: str, output_path: str):
+def _extract_audio(video_path: str, output_path: str) -> None:
     video_clip = VideoFileClip(video_path)
     audio_clip = video_clip.audio
     assert audio_clip is not None, "No audio track found in the video."
@@ -77,10 +77,11 @@ def _describe_frame(video_path: str, timestamp: float, model: str = "google/gemi
         if cost is None:
             cost = 0.0
 
-        return (cost, f"Description of image at {timestamp:.2f}s: {response.content}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"An error occurred while processing the frame: {e}")
         return (0.0, f"Error processing image at {timestamp:.2f}s")
+    else:
+        return (cost, f"Description of image at {timestamp:.2f}s: {response.content}")
 
 
 def mp4_to_text(video_path: str, output_path: str) -> float:

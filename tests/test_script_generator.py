@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
+from pytest import MonkeyPatch
 
 from src.script_generator import ManimScriptGenerator
+
+# PLR2004 constants
+DEDUP_THRESHOLD = 0.95
+HIGH_SIMILARITY_THRESHOLD = 0.99
+EXPECTED_FAILED_CRITERIA_COUNT = 5
 
 # ---------------------------------------------------------------------------
 # _frame_similarity
@@ -21,17 +29,17 @@ class TestFrameSimilarity:
         """Return a black frame (uint8)."""
         return np.zeros((h, w, 3), dtype=np.uint8)
 
-    def test_identical_frames_return_one(self):
+    def test_identical_frames_return_one(self) -> None:
         frame = self._make_dark_frame()
         assert ManimScriptGenerator._frame_similarity(frame, frame) == pytest.approx(1.0)
 
-    def test_completely_different_frames(self):
+    def test_completely_different_frames(self) -> None:
         black = self._make_dark_frame()
         white = np.full_like(black, 255)
         sim = ManimScriptGenerator._frame_similarity(black, white)
         assert sim == pytest.approx(0.0, abs=0.01)
 
-    def test_small_content_on_dark_background_detected(self):
+    def test_small_content_on_dark_background_detected(self) -> None:
         """A small bright region on a dark frame must be detected as different.
 
         This is the scenario that was broken when using cosine similarity:
@@ -49,11 +57,12 @@ class TestFrameSimilarity:
 
         sim = ManimScriptGenerator._frame_similarity(frame_a, frame_b)
         # Must be below the dedup threshold so both frames are kept
-        assert sim < 0.95, (
-            f"Similarity {sim:.4f} >= 0.95; small content changes on a dark " "background are being hidden by the metric"
+        assert sim < DEDUP_THRESHOLD, (
+            f"Similarity {sim:.4f} >= {DEDUP_THRESHOLD}; small content changes on a dark "
+            "background are being hidden by the metric"
         )
 
-    def test_same_content_same_position_is_similar(self):
+    def test_same_content_same_position_is_similar(self) -> None:
         """Frames with identical content should still score high."""
         frame_a = self._make_dark_frame()
         frame_b = self._make_dark_frame()
@@ -62,12 +71,12 @@ class TestFrameSimilarity:
         sim = ManimScriptGenerator._frame_similarity(frame_a, frame_b)
         assert sim == pytest.approx(1.0)
 
-    def test_slight_brightness_change_is_high_similarity(self):
+    def test_slight_brightness_change_is_high_similarity(self) -> None:
         """A tiny global brightness bump should score close to 1."""
         frame_a = np.full((120, 160, 3), 100, dtype=np.uint8)
         frame_b = np.full((120, 160, 3), 105, dtype=np.uint8)
         sim = ManimScriptGenerator._frame_similarity(frame_a, frame_b)
-        assert sim > 0.99
+        assert sim > HIGH_SIMILARITY_THRESHOLD
 
 
 # ---------------------------------------------------------------------------
@@ -94,24 +103,23 @@ class TestExtractVideoFrames:
             frames.append(f)
         return frames
 
-    def test_extracts_multiple_distinct_frames(self, monkeypatch):
+    def test_extracts_multiple_distinct_frames(self, monkeypatch: MonkeyPatch) -> None:
         """With clearly distinct frames, extraction should keep more than 1."""
         frames = self._make_synthetic_frames(10)
         duration = 10.0
 
         class FakeClip:
-            def __init__(self, path):
+            def __init__(self, path: str) -> None:
                 self.duration = duration
 
-            def get_frame(self, t):
+            def get_frame(self, t: float) -> np.ndarray:
                 idx = min(int(t), len(frames) - 1)
                 return frames[idx]
 
-            def close(self):
+            def close(self) -> None:
                 pass
 
         monkeypatch.setattr("src.script_generator.VideoFileClip", FakeClip)
-        from pathlib import Path
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert len(parts) > 1, f"Only {len(parts)} frame(s) extracted from {len(frames)} distinct frames"
@@ -121,7 +129,7 @@ class TestExtractVideoFrames:
             assert label.startswith("Frame at ")
             assert img_part["type"] == "image_url"
 
-    def test_identical_frames_deduplicated_to_one(self, monkeypatch):
+    def test_identical_frames_deduplicated_to_one(self, monkeypatch: MonkeyPatch) -> None:
         """If every sampled frame is identical, only 1 should be kept."""
         # Non-black so it passes the std < 2 filter; SSIM=1.0 between identical
         # frames so all but the first are deduplicated.
@@ -129,33 +137,31 @@ class TestExtractVideoFrames:
         frame[40:80, 60:100] = 200  # bright rectangle, std well above 2
 
         class FakeClip:
-            def __init__(self, path):
+            def __init__(self, path: str) -> None:
                 self.duration = 10.0
 
-            def get_frame(self, t):
+            def get_frame(self, t: float) -> np.ndarray:
                 return frame.copy()
 
-            def close(self):
+            def close(self) -> None:
                 pass
 
         monkeypatch.setattr("src.script_generator.VideoFileClip", FakeClip)
-        from pathlib import Path
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert len(parts) == 1
         label, _ = parts[0]
         assert label == "Frame at 0:00"
 
-    def test_zero_duration_returns_empty(self, monkeypatch):
+    def test_zero_duration_returns_empty(self, monkeypatch: MonkeyPatch) -> None:
         class FakeClip:
-            def __init__(self, path):
+            def __init__(self, path: str) -> None:
                 self.duration = 0.0
 
-            def close(self):
+            def close(self) -> None:
                 pass
 
         monkeypatch.setattr("src.script_generator.VideoFileClip", FakeClip)
-        from pathlib import Path
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert parts == []
@@ -167,22 +173,22 @@ class TestExtractVideoFrames:
 
 
 class TestFormatTimestamp:
-    def test_zero(self):
+    def test_zero(self) -> None:
         assert ManimScriptGenerator._format_timestamp(0) == "0:00"
 
-    def test_seconds_only(self):
+    def test_seconds_only(self) -> None:
         assert ManimScriptGenerator._format_timestamp(45) == "0:45"
 
-    def test_minutes_and_seconds(self):
+    def test_minutes_and_seconds(self) -> None:
         assert ManimScriptGenerator._format_timestamp(125) == "2:05"
 
-    def test_hours(self):
+    def test_hours(self) -> None:
         assert ManimScriptGenerator._format_timestamp(3661) == "1:01:01"
 
-    def test_fractional_seconds_truncated(self):
+    def test_fractional_seconds_truncated(self) -> None:
         assert ManimScriptGenerator._format_timestamp(90.7) == "1:30"
 
-    def test_no_milliseconds_in_output(self):
+    def test_no_milliseconds_in_output(self) -> None:
         result = ManimScriptGenerator._format_timestamp(12.999)
         assert "." not in result
 
@@ -193,7 +199,7 @@ class TestFormatTimestamp:
 
 
 class TestVideoReview:
-    def test_no_issues(self):
+    def test_no_issues(self) -> None:
         from src.script_generator import VideoReview
 
         r = VideoReview(
@@ -206,7 +212,7 @@ class TestVideoReview:
         assert not r.has_issues
         assert r.failed_criteria() == []
 
-    def test_all_issues(self):
+    def test_all_issues(self) -> None:
         from src.script_generator import VideoReview
 
         r = VideoReview(
@@ -217,9 +223,9 @@ class TestVideoReview:
             latex_rendering=True,
         )
         assert r.has_issues
-        assert len(r.failed_criteria()) == 5
+        assert len(r.failed_criteria()) == EXPECTED_FAILED_CRITERIA_COUNT
 
-    def test_single_issue(self):
+    def test_single_issue(self) -> None:
         from src.script_generator import VideoReview
 
         r = VideoReview(

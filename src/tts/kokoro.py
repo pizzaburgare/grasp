@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import numpy as np
 
@@ -18,7 +19,7 @@ class KokoroTTSEngine(TTSEngine):
         voice: str = _DEFAULT_VOICE,
         lang_code: str = _DEFAULT_LANG_CODE,
         speed: float = _DEFAULT_SPEED_,
-    ):
+    ) -> None:
         self.voice = voice
         self.lang_code = lang_code
         self.speed = speed
@@ -32,7 +33,7 @@ class KokoroTTSEngine(TTSEngine):
             speed=float(os.environ.get("KOKORO_SPEED", _DEFAULT_SPEED_)),
         )
 
-    def _load_pipeline(self):
+    def _load_pipeline(self) -> Any:
         if self._pipeline is None:
             from kokoro import KPipeline
 

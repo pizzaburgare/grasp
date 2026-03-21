@@ -142,7 +142,7 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
 
 
 class AudioManager:
-    def __init__(self, scene: Scene, engine: TTSEngine | None = None):
+    def __init__(self, scene: Scene, engine: TTSEngine | None = None) -> None:
         self.i: int = 0
         self.scene = scene
         self.engine = engine or get_default_engine()

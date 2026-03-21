@@ -84,16 +84,34 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors (PEP 8 basics)
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes (logical errors, unused imports)
-    "I",   # isort (automatically sorts imports)
-    "B",   # flake8-bugbear (flags common bugs and design problems)
-    "UP",  # pyupgrade (automatically updates syntax to modern Python)
-    "SIM", # flake8-simplify (suggests code simplifications)
-    "RUF", # Ruff-specific rules
+    "E",      # pycodestyle errors (PEP 8 basics)
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (logical errors, unused imports)
+    "I",      # isort (automatically sorts imports)
+    "B",      # flake8-bugbear (flags common bugs and design problems)
+    "UP",     # pyupgrade (automatically updates syntax to modern Python)
+    "SIM",    # flake8-simplify (suggests code simplifications)
+    "RUF",    # Ruff-specific rules
+    "ANN",    # type annotations required
+    "BLE",    # blind exception catches
+    "TRY",    # exception handling best practices
+    "N",      # PEP 8 naming conventions
+    "PLR2004",# magic value literals
+    "C90",    # McCabe cyclomatic complexity
+    "PLR0912",# too many branches
+    "TID",    # tidy imports (ban relative imports)
+    "ISC",    # implicit string concatenation
 ]
-ignore = []
+ignore = [
+    "ANN002",  # *args annotation — rarely adds value
+    "ANN003",  # **kwargs annotation — rarely adds value
+    "ANN401",  # use of Any — acceptable for complex types
+    "TRY003",  # allow bare except clauses
+    "ISC001",  # allow implicit string concatenation (e.g. multi-line docstrings)
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
 
 [tool.ruff.format]
 quote-style = "double"

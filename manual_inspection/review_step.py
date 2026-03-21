@@ -20,6 +20,7 @@ import contextlib
 import io
 import sys
 from pathlib import Path
+from typing import Any
 
 import matplotlib.gridspec as gridspec  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
@@ -30,6 +31,8 @@ from PIL import Image
 from src.script_generator import ManimScriptGenerator, VideoReview
 
 BG = "#0d0d0d"
+SSIM_GREEN_THRESHOLD = 90
+SSIM_YELLOW_THRESHOLD = 70
 
 
 # ---------------------------------------------------------------------------
@@ -39,8 +42,8 @@ BG = "#0d0d0d"
 
 def _global_ssim(a: np.ndarray, b: np.ndarray) -> float:
     """Image-level SSIM on BT.601 grayscale. Returns value in [-1, 1]."""
-    C1 = (0.01 * 255) ** 2
-    C2 = (0.03 * 255) ** 2
+    c1 = (0.01 * 255) ** 2
+    c2 = (0.03 * 255) ** 2
 
     def to_gray(x: np.ndarray) -> np.ndarray:
         f = x.astype(np.float64)
@@ -50,8 +53,8 @@ def _global_ssim(a: np.ndarray, b: np.ndarray) -> float:
     mu_a, mu_b = ga.mean(), gb.mean()
     var_a, var_b = ga.var(), gb.var()
     cov = float(np.mean((ga - mu_a) * (gb - mu_b)))
-    num = (2 * mu_a * mu_b + C1) * (2 * cov + C2)
-    den = (mu_a**2 + mu_b**2 + C1) * (var_a + var_b + C2)
+    num = (2 * mu_a * mu_b + c1) * (2 * cov + c2)
+    den = (mu_a**2 + mu_b**2 + c1) * (var_a + var_b + c2)
     return float(np.clip(num / den, -1.0, 1.0))
 
 
@@ -88,7 +91,7 @@ def run_review(
             review: VideoReview = result["parsed"]  # type: ignore[index]
             reviews.append(review)
             status = f"ISSUES ({', '.join(review.failed_criteria())})" if review.has_issues else "OK"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             reviews.append(None)
             status = f"ERROR ({exc})"
         print(f"  [{i}/{len(raw_parts)}] {label}: {status}")
@@ -251,7 +254,7 @@ class FrameViewer:
             self.idx = new
             self._render()
 
-    def _on_key(self, event) -> None:  # type: ignore[no-untyped-def]
+    def _on_key(self, event: Any) -> None:
         if event.key in ("right", "l"):
             self.go(+1)
         elif event.key in ("left", "h"):
@@ -311,9 +314,9 @@ class FrameViewer:
             pct = sim * 100
             filled = round(pct / 5)  # 20-block bar
             bar = "█" * filled + "░" * (20 - filled)
-            if pct >= 90:
+            if pct >= SSIM_GREEN_THRESHOLD:
                 color = "#a6e3a1"  # green  - nearly identical
-            elif pct >= 70:
+            elif pct >= SSIM_YELLOW_THRESHOLD:
                 color = "#f9e2af"  # yellow - noticeable change
             else:
                 color = "#f38ba8"  # red    - very different

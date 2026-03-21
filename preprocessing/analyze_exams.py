@@ -59,7 +59,7 @@ def parse_llm_object(llm_output: str) -> dict[str, list[str]]:
     except json.JSONDecodeError:
         parsed = ast.literal_eval(cleaned)
     if not isinstance(parsed, dict):
-        raise ValueError("Expected a JSON object from LLM response.")
+        raise TypeError("Expected a JSON object from LLM response.")
     return parsed
 
 

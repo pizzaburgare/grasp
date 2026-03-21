@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -17,6 +18,7 @@ logging.getLogger("transformers").setLevel(logging.WARNING)
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 
 _DEFAULT_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+_MIN_AUDIO_CHANNELS = 2
 
 
 class QwenTTSEngine(TTSEngine):
@@ -29,7 +31,7 @@ class QwenTTSEngine(TTSEngine):
         language: str = "English",
         ref_audio: str | None = None,
         ref_text: str | None = None,
-    ):
+    ) -> None:
         self.model_id = model_id
         self.speaker = speaker
         self.language = language
@@ -47,7 +49,7 @@ class QwenTTSEngine(TTSEngine):
             ref_text=os.environ.get("QWEN_TTS_REF_TEXT") or None,
         )
 
-    def _load_model(self):
+    def _load_model(self) -> Any:
         if self._model is None:
             from qwen_tts import Qwen3TTSModel
 
@@ -111,6 +113,6 @@ class QwenTTSEngine(TTSEngine):
         if hasattr(audio, "detach"):  # torch.Tensor → numpy
             audio = audio.detach().cpu().numpy()  # type: ignore[union-attr]
         audio = np.asarray(audio, dtype=np.float32)
-        if audio.ndim == 2:
+        if audio.ndim == _MIN_AUDIO_CHANNELS:
             audio = audio[0]
         return audio, sr

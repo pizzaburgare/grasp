@@ -17,7 +17,7 @@ def _already_processed(dest: Path) -> bool:
     return False
 
 
-def batch_process(input_dir: Path, output_dir: Path, local: bool = False):
+def batch_process(input_dir: Path, output_dir: Path, local: bool = False) -> None:  # noqa: C901, PLR0912
     input_root = input_dir
     output_root = output_dir
     output_root.mkdir(parents=True, exist_ok=True)

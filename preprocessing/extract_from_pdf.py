@@ -1,13 +1,17 @@
 import re
 import sys
+from pathlib import Path
 
 import fitz  # type: ignore
 
+TOC_LEVEL_1 = 1
+MIN_ARGS = 2
 
-def get_toc_topics(pdf_path):
+
+def get_toc_topics(pdf_path: Path | str) -> list[dict]:
     """Returns a list of Level 1 topics: [{'title': str, 'page': int}]"""
     with fitz.open(pdf_path) as doc:
-        return [{"title": t[1], "page": t[2] - 1} for t in doc.get_toc() if t[0] == 1]
+        return [{"title": t[1], "page": t[2] - 1} for t in doc.get_toc() if t[0] == TOC_LEVEL_1]
 
 
 def safe_topic_name(title: str) -> str:
@@ -29,7 +33,7 @@ def extract_topic_pdf(pdf_path: str, topic_idx: int, output_pdf_path: str) -> No
         new_doc.close()
 
 
-def extract_topic(pdf_path, target_topic):
+def extract_topic(pdf_path: Path | str, target_topic: str) -> None:
     topics = get_toc_topics(pdf_path)
     idx = next(
         (i for i, t in enumerate(topics) if target_topic.lower() in t["title"].lower()),
@@ -56,7 +60,7 @@ def extract_topic(pdf_path, target_topic):
 
 if __name__ == "__main__":
     FILE = "courses/FMNF05/lectures/slides.pdf"
-    if len(sys.argv) < 2:
+    if len(sys.argv) < MIN_ARGS:
         print(
             "Usage:\n uv run preprocessing/extract_from_pdf.py --get-topics"
             "uv run preprocessing/extract_from_pdf.py <topic_keyword>"

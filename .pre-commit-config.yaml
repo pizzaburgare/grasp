@@ -18,3 +18,12 @@ repos:
     rev: v1.1.408
     hooks:
     -   id: pyright
+
+-   repo: local
+    hooks:
+    -   id: check-file-length
+        name: check file length (max 600 lines)
+        entry: python scripts/check_file_length.py
+        language: system
+        types: [python]
+        exclude: ^tests/

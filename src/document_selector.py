@@ -53,7 +53,7 @@ def _extract_markdown_frontmatter(text: str) -> dict[str, Any] | None:
         return None
     try:
         metadata = yaml.safe_load(match.group(1))
-    except Exception:
+    except yaml.YAMLError:
         return None
     if not isinstance(metadata, dict):
         return None
@@ -65,7 +65,7 @@ class _Selection(BaseModel):
 
 
 class DocumentSelectorAgent:
-    def __init__(self, base_dir: Path, model: str | None = None):
+    def __init__(self, base_dir: Path, model: str | None = None) -> None:
         self.base_dir = base_dir.resolve()
         self._llm = ChatOpenAI(
             model=model or DOCUMENT_SELECTOR_MODEL,
@@ -120,7 +120,7 @@ class DocumentSelectorAgent:
                 result.append(path)
         return result
 
-    def _build_tools(self) -> list:
+    def _build_tools(self) -> list:  # noqa: C901
         base = self.base_dir
 
         @tool
@@ -152,7 +152,7 @@ class DocumentSelectorAgent:
             if suffix in {".md", ".markdown"}:
                 try:
                     markdown_text = path.read_text(errors="replace")
-                except Exception:
+                except OSError:
                     return f"{suffix} file, {path.stat().st_size:,} bytes"
                 metadata = _extract_markdown_frontmatter(markdown_text)
                 if metadata:
@@ -166,7 +166,7 @@ class DocumentSelectorAgent:
             else:
                 try:
                     document_text = path.read_text(errors="replace").strip()
-                except Exception:
+                except OSError:
                     return f"{suffix or 'binary'} file, {path.stat().st_size:,} bytes"
 
             if not document_text:

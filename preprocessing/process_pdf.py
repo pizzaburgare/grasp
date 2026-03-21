@@ -2,6 +2,7 @@ import base64
 import os
 import re
 from datetime import date
+from pathlib import Path
 
 import yaml
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -12,18 +13,21 @@ from pydantic import SecretStr
 from src.llm_metrics import extract_llm_usage
 from src.paths import PDF_TRANSCRIBER_PROMPT
 
+MIN_FENCE_LINES = 2
+
 
 def strip_outer_markdown_fence(text: str) -> str:
     """Removes a single outer ```md/```markdown fence wrapper if present."""
     stripped = text.strip()
     lines = stripped.splitlines()
-    if len(lines) >= 2 and re.fullmatch(r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE) and lines[-1].strip() == "```":
+    fence_match = len(lines) >= MIN_FENCE_LINES and re.fullmatch(r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE)
+    if fence_match and lines[-1].strip() == "```":
         return "\n".join(lines[1:-1]).strip()
 
     return stripped
 
 
-def local_pdf_conversion(input_path, output_path):
+def local_pdf_conversion(input_path: str | Path, output_path: str | Path) -> None:
     """
     Converts a PDF to Markdown and strips out CID tags,
     excessive formatting characters, and redundant whitespace.
@@ -54,7 +58,7 @@ def local_pdf_conversion(input_path, output_path):
 
         print(f"Successfully cleaned and saved to: {output_path}")
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"An error occurred during processing: {e}")
 
 
@@ -148,7 +152,7 @@ def pdf_to_md_llm(
     return cost
 
 
-def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False):
+def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False) -> float:
     if local:
         local_pdf_conversion(input_file, output_file)
         return 0.0

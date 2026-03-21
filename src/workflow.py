@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 class CourseWorkflow:
-    def __init__(self, model: str | None = None):
+    def __init__(self, model: str | None = None) -> None:
         # If a global model override is supplied (e.g. via --model CLI flag)
         # it takes precedence over every stage's env-configured model.
         planner_model = model or LESSON_PLANNER_MODEL
@@ -338,7 +338,7 @@ class CourseWorkflow:
 
         raise ValueError(f"No Scene subclass found in {script_path}")
 
-    def render_and_merge(
+    def render_and_merge(  # noqa: PLR0912
         self,
         script_path: Path,
         output_dir: Path,
@@ -463,7 +463,7 @@ class CourseWorkflow:
     # Full pipeline
     # ------------------------------------------------------------------
 
-    def run_full_pipeline(
+    def run_full_pipeline(  # noqa: C901, PLR0912
         self,
         topic: str,
         input_dir: str | None = None,

@@ -31,6 +31,8 @@ _REVIEW_FRAME_QUALITY = 70
 # Dense scan settings for scene-change detection
 _SCENE_SCAN_INTERVAL = 0.5  # seconds between scan samples
 _SCENE_SETTLE_THRESHOLD = 0.01  # max mean absolute pixel difference to count as "settled"
+_MIN_CLIP_DURATION = 2.0
+_HIGH_SSIM_THRESHOLD = 0.99
 
 
 # ---------------------------------------------------------------------------
@@ -40,15 +42,15 @@ _SCENE_SETTLE_THRESHOLD = 0.01  # max mean absolute pixel difference to count as
 
 def _frame_ssim(a: np.ndarray, b: np.ndarray) -> float:
     """Compute global SSIM on BT.601 luma.  Returns a value in [-1, 1]."""
-    C1 = (0.01 * 255) ** 2
-    C2 = (0.03 * 255) ** 2
+    c1 = (0.01 * 255) ** 2
+    c2 = (0.03 * 255) ** 2
     ga = np.dot(a[..., :3].astype(np.float64), [0.299, 0.587, 0.114])
     gb = np.dot(b[..., :3].astype(np.float64), [0.299, 0.587, 0.114])
     mu_a, mu_b = ga.mean(), gb.mean()
     var_a, var_b = ga.var(), gb.var()
     cov = float(np.mean((ga - mu_a) * (gb - mu_b)))
-    num = (2 * mu_a * mu_b + C1) * (2 * cov + C2)
-    den = (mu_a**2 + mu_b**2 + C1) * (var_a + var_b + C2)
+    num = (2 * mu_a * mu_b + c1) * (2 * cov + c2)
+    den = (mu_a**2 + mu_b**2 + c1) * (var_a + var_b + c2)
     return float(np.clip(num / den, -1.0, 1.0))
 
 
@@ -114,7 +116,7 @@ class ManimScriptGenerator:
         generation_model: str = MANIM_GENERATOR_MODEL,
         review_model: str = VIDEO_REVIEW_MODEL,
         fix_model: str = VIDEO_FIX_MODEL,
-    ):
+    ) -> None:
         self.model = generation_model
         self.review_model = review_model
         self.fix_model = fix_model
@@ -292,7 +294,8 @@ Generate a complete Manim script that:
                 next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
 
                 mae = float(np.mean(np.abs(curr_frame.astype(np.int16) - next_frame.astype(np.int16))))
-                if mae <= _SCENE_SETTLE_THRESHOLD and t - last_kept_t >= 1.0 and float(np.std(curr_frame)) >= 2.0:  # not blank
+                not_blank = float(np.std(curr_frame)) >= _MIN_CLIP_DURATION
+                if mae <= _SCENE_SETTLE_THRESHOLD and t - last_kept_t >= 1.0 and not_blank:
                     candidates.append((t, curr_frame.copy()))
                     last_kept_t = t
 
@@ -329,7 +332,7 @@ Generate a complete Manim script that:
         # ----------------------------------------------------------
         deduped: list[tuple[float, np.ndarray]] = [candidates[0]]
         for ts, frame in candidates[1:]:
-            if ManimScriptGenerator._frame_similarity(deduped[-1][1], frame) < 0.99:
+            if ManimScriptGenerator._frame_similarity(deduped[-1][1], frame) < _HIGH_SSIM_THRESHOLD:
                 deduped.append((ts, frame))
 
         # ----------------------------------------------------------

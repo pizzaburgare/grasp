@@ -3,8 +3,11 @@
 # aider-chat requires Python <3.13; we copy only this file and stub its
 # two aider-internal imports below.
 
+from __future__ import annotations
+
 import tempfile
 from pathlib import Path
+from typing import Any
 
 try:
     import git  # type: ignore[import-untyped]
@@ -18,14 +21,14 @@ from diff_match_patch import diff_match_patch
 # ---------------------------------------------------------------------------
 
 
-def dump(*args):
+def dump(*args: Any) -> None:
     """Debug printer (no-op in production)."""
 
 
 class GitTemporaryDirectory:
     """Context manager that creates a temp git repo directory."""
 
-    def __enter__(self):
+    def __enter__(self) -> str:
         self._tmpdir = tempfile.TemporaryDirectory()
         dname = self._tmpdir.name
         if git is not None:
@@ -34,7 +37,7 @@ class GitTemporaryDirectory:
             repo.config_writer().set_value("user", "email", "aider@example.com").release()
         return dname
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         self._tmpdir.cleanup()
 
 
@@ -53,26 +56,26 @@ class RelativeIndenter:
     line.
     """
 
-    def __init__(self, texts):
+    def __init__(self, texts: list[str]) -> None:
         """Based on the texts, choose a unicode character that isn't in any of them."""
         chars = set()
         for text in texts:
             chars.update(text)
 
-        ARROW = "\u2190"  # ←
-        if ARROW not in chars:
-            self.marker = ARROW
+        arrow = "\u2190"  # ←
+        if arrow not in chars:
+            self.marker = arrow
         else:
             self.marker = self.select_unique_marker(chars)
 
-    def select_unique_marker(self, chars):
+    def select_unique_marker(self, chars: str) -> str:
         for codepoint in range(0x10FFFF, 0x10000, -1):
             marker = chr(codepoint)
             if marker not in chars:
                 return marker
         raise ValueError("Could not find a unique marker")
 
-    def make_relative(self, text):
+    def make_relative(self, text: str) -> str:
         """Transform text to use relative indents."""
         if self.marker in text:
             raise ValueError(f"Text already contains the outdent marker: {self.marker}")
@@ -99,7 +102,7 @@ class RelativeIndenter:
         res = "".join(output)
         return res
 
-    def make_absolute(self, text):
+    def make_absolute(self, text: str) -> str:
         """Transform text from relative back to absolute indents."""
         lines = text.splitlines(keepends=True)
         output = []
@@ -131,7 +134,7 @@ class RelativeIndenter:
 # ---------------------------------------------------------------------------
 
 
-def map_patches(texts, patches, debug):
+def map_patches(texts: list[str], patches: list, debug: bool) -> list:
     search_text, _, original_text = texts
 
     dmp = diff_match_patch()
@@ -162,7 +165,7 @@ def map_patches(texts, patches, debug):
     return patches
 
 
-def relative_indent(texts):
+def relative_indent(texts: list[str]) -> tuple[RelativeIndenter, list[str]]:
     ri = RelativeIndenter(texts)
     texts = list(map(ri.make_relative, texts))
     return ri, texts
@@ -171,18 +174,18 @@ def relative_indent(texts):
 line_padding = 100
 
 
-def line_pad(text):
+def line_pad(text: str) -> str:
     padding = "\n" * line_padding
     return padding + text + padding
 
 
-def line_unpad(text):
+def line_unpad(text: str) -> str | None:
     if set(text[:line_padding] + text[-line_padding:]) != set("\n"):
-        return
+        return None
     return text[line_padding:-line_padding]
 
 
-def dmp_apply(texts, remap=True):
+def dmp_apply(texts: list[str], remap: bool = True) -> str | None:
     debug = False
 
     search_text, replace_text, original_text = texts
@@ -231,12 +234,12 @@ def dmp_apply(texts, remap=True):
         dump(all_success)
 
     if not all_success:
-        return
+        return None
 
     return new_text
 
 
-def lines_to_chars(lines, mapping):
+def lines_to_chars(lines: str, mapping: list[str]) -> str:
     new_text = []
     for char in lines:
         new_text.append(mapping[ord(char)])
@@ -244,7 +247,7 @@ def lines_to_chars(lines, mapping):
     return new_text
 
 
-def dmp_lines_apply(texts):
+def dmp_lines_apply(texts: list[str]) -> str | None:
     debug = False
 
     for t in texts:
@@ -299,12 +302,12 @@ def dmp_lines_apply(texts):
         dump(all_success)
 
     if not all_success:
-        return
+        return None
 
     return new_text
 
 
-def diff_lines(search_text, replace_text):
+def diff_lines(search_text: str, replace_text: str) -> list:
     dmp = diff_match_patch()
     dmp.Diff_Timeout = 5
 
@@ -336,20 +339,20 @@ def diff_lines(search_text, replace_text):
 # ---------------------------------------------------------------------------
 
 
-def search_and_replace(texts):
+def search_and_replace(texts: list[str]) -> str | None:
     search_text, replace_text, original_text = texts
 
     num = original_text.count(search_text)
     if num == 0:
-        return
+        return None
 
     new_text = original_text.replace(search_text, replace_text)
     return new_text
 
 
-def git_cherry_pick_osr_onto_o(texts):
+def git_cherry_pick_osr_onto_o(texts: list[str]) -> str | None:
     if git is None:
-        return
+        return None
 
     search_text, replace_text, original_text = texts
 
@@ -380,15 +383,15 @@ def git_cherry_pick_osr_onto_o(texts):
             repo.git.cherry_pick(replace_hash, "--minimal")
         except (git.exc.ODBError, git.exc.GitError):
             # merge conflicts!
-            return
+            return None
 
         new_text = fname.read_text()
         return new_text
 
 
-def git_cherry_pick_sr_onto_so(texts):
+def git_cherry_pick_sr_onto_so(texts: list[str]) -> str | None:
     if git is None:
-        return
+        return None
 
     search_text, replace_text, original_text = texts
 
@@ -420,13 +423,13 @@ def git_cherry_pick_sr_onto_so(texts):
             repo.git.cherry_pick(replace_hash, "--minimal")
         except (git.exc.ODBError, git.exc.GitError):
             # merge conflicts!
-            return
+            return None
 
         new_text = fname.read_text()
         return new_text
 
 
-class SearchTextNotUnique(ValueError):
+class SearchTextNotUniqueError(ValueError):
     pass
 
 
@@ -470,7 +473,10 @@ udiff_strategies = [
 # ---------------------------------------------------------------------------
 
 
-def flexible_search_and_replace(texts, strategies=None):
+def flexible_search_and_replace(
+    texts: list[str],
+    strategies: list | None = None,
+) -> str | None:
     """Try a series of search/replace methods, starting from the most
     literal interpretation of search_text. If needed, progress to more
     flexible methods, which can accommodate divergence between
@@ -486,14 +492,20 @@ def flexible_search_and_replace(texts, strategies=None):
             if res:
                 return res
 
+    return None
 
-def reverse_lines(text):
+
+def reverse_lines(text: str) -> str:
     lines = text.splitlines(keepends=True)
     lines.reverse()
     return "".join(lines)
 
 
-def try_strategy(texts, strategy, preproc):
+def try_strategy(
+    texts: list[str],
+    strategy: Any,
+    preproc: tuple,
+) -> str | None:
     preproc_strip_blank_lines, preproc_relative_indent, preproc_reverse = preproc
     ri = None
 
@@ -513,12 +525,12 @@ def try_strategy(texts, strategy, preproc):
         try:
             res = ri.make_absolute(res)  # type: ignore[union-attr]
         except ValueError:
-            return
+            return None
 
     return res
 
 
-def strip_blank_lines(texts):
+def strip_blank_lines(texts: list[str]) -> list[str]:
     # strip leading and trailing blank lines
     texts = [text.strip("\n") + "\n" for text in texts]
     return texts

@@ -1,6 +1,7 @@
 import io
 import os
 import wave
+from typing import Any
 
 import numpy as np
 
@@ -14,7 +15,7 @@ _DEFAULT_MODEL = str(PIPER_DEFAULT_MODEL)
 class PiperTTSEngine(TTSEngine):
     ENGINE_NAME = "piper"
 
-    def __init__(self, model_path: str = _DEFAULT_MODEL):
+    def __init__(self, model_path: str = _DEFAULT_MODEL) -> None:
         self.model_path = model_path
         self._voice = None
 
@@ -22,7 +23,7 @@ class PiperTTSEngine(TTSEngine):
     def from_env(cls) -> "PiperTTSEngine":
         return cls(model_path=os.environ.get("PIPER_MODEL", _DEFAULT_MODEL))
 
-    def _load_voice(self):
+    def _load_voice(self) -> Any:
         if self._voice is None:
             from piper.voice import PiperVoice
 

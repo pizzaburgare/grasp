@@ -16,12 +16,17 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from pytest import MonkeyPatch
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 SAMPLE_RATE = 24000
+
+# PLR2004 constants
+HASH_HEX_LENGTH = 16
+EXPECTED_CACHE_WAV_COUNT = 2
 
 
 def _write_wav(path: Path, n_samples: int = SAMPLE_RATE, sr: int = SAMPLE_RATE) -> None:
@@ -46,37 +51,37 @@ def _make_engine(n_samples: int = SAMPLE_RATE, sr: int = SAMPLE_RATE) -> MagicMo
 
 
 class TestLessonNameToKey:
-    def test_basic_lowercase_and_spaces(self):
+    def test_basic_lowercase_and_spaces(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("LU Decomposition") == "lu-decomposition"
 
-    def test_underscores_become_dashes(self):
+    def test_underscores_become_dashes(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("lu_decomposition") == "lu-decomposition"
 
-    def test_special_chars_stripped(self):
+    def test_special_chars_stripped(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("Eigenvalues & Eigenvectors!") == "eigenvalues-eigenvectors"
 
-    def test_already_slug_unchanged(self):
+    def test_already_slug_unchanged(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("lu-decomposition") == "lu-decomposition"
 
-    def test_multiple_spaces_collapsed(self):
+    def test_multiple_spaces_collapsed(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("a  b") == "a-b"
 
-    def test_different_names_produce_different_keys(self):
+    def test_different_names_produce_different_keys(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("Fourier Transform") != lesson_name_to_key("LU Decomposition")
 
-    def test_same_input_deterministic(self):
+    def test_same_input_deterministic(self) -> None:
         from src.cache import lesson_name_to_key
 
         assert lesson_name_to_key("Neural Nets") == lesson_name_to_key("Neural Nets")
@@ -88,24 +93,24 @@ class TestLessonNameToKey:
 
 
 class TestHashContext:
-    def test_same_topic_deterministic(self):
+    def test_same_topic_deterministic(self) -> None:
         from src.cache import hash_context
 
         assert hash_context("LU Decomposition") == hash_context("LU Decomposition")
 
-    def test_different_topics_differ(self):
+    def test_different_topics_differ(self) -> None:
         from src.cache import hash_context
 
         assert hash_context("LU Decomposition") != hash_context("Fourier Transform")
 
-    def test_returns_16_char_hex(self):
+    def test_returns_16_char_hex(self) -> None:
         from src.cache import hash_context
 
         result = hash_context("any topic")
-        assert len(result) == 16
+        assert len(result) == HASH_HEX_LENGTH
         assert all(c in "0123456789abcdef" for c in result)
 
-    def test_with_input_dir_differs_from_without(self, tmp_path):
+    def test_with_input_dir_differs_from_without(self, tmp_path: Path) -> None:
         from src.cache import hash_context
 
         (tmp_path / "notes.txt").write_text("some content")
@@ -113,7 +118,7 @@ class TestHashContext:
         h_without = hash_context("topic")
         assert h_with != h_without
 
-    def test_file_content_change_changes_hash(self, tmp_path):
+    def test_file_content_change_changes_hash(self, tmp_path: Path) -> None:
         from src.cache import hash_context
 
         f = tmp_path / "notes.txt"
@@ -123,7 +128,7 @@ class TestHashContext:
         h2 = hash_context("topic", str(tmp_path))
         assert h1 != h2
 
-    def test_empty_input_dir_differs_from_no_input_dir(self, tmp_path):
+    def test_empty_input_dir_differs_from_no_input_dir(self, tmp_path: Path) -> None:
         from src.cache import hash_context
 
         # Empty directory - no files, but we still pass a path
@@ -132,7 +137,7 @@ class TestHashContext:
         # (depends on implementation - both are valid; we just verify determinism)
         assert h_empty_dir == hash_context("topic", str(tmp_path))
 
-    def test_multiple_files_order_independent(self, tmp_path):
+    def test_multiple_files_order_independent(self, tmp_path: Path) -> None:
         from src.cache import hash_context
 
         # sorted() over rglob means the hash is deterministic regardless of FS order
@@ -142,7 +147,7 @@ class TestHashContext:
         h2 = hash_context("topic", str(tmp_path))
         assert h1 == h2
 
-    def test_relative_path_change_changes_hash(self, tmp_path):
+    def test_relative_path_change_changes_hash(self, tmp_path: Path) -> None:
         from src.cache import hash_context
 
         f = tmp_path / "notes.txt"
@@ -157,7 +162,7 @@ class TestHashContext:
 
         assert h1 != h2
 
-    def test_extra_context_changes_hash(self):
+    def test_extra_context_changes_hash(self) -> None:
         from src.cache import hash_context
 
         h1 = hash_context("topic", extra_context={"model": "a"})
@@ -171,31 +176,31 @@ class TestHashContext:
 
 
 class TestHashText:
-    def test_same_text_deterministic(self):
+    def test_same_text_deterministic(self) -> None:
         from src.cache import hash_text
 
         assert hash_text("Hello world") == hash_text("Hello world")
 
-    def test_different_texts_differ(self):
+    def test_different_texts_differ(self) -> None:
         from src.cache import hash_text
 
         assert hash_text("Hello world") != hash_text("Goodbye world")
 
-    def test_returns_16_char_hex(self):
+    def test_returns_16_char_hex(self) -> None:
         from src.cache import hash_text
 
         result = hash_text("some text")
-        assert len(result) == 16
+        assert len(result) == HASH_HEX_LENGTH
         assert all(c in "0123456789abcdef" for c in result)
 
-    def test_matches_manual_sha256(self):
+    def test_matches_manual_sha256(self) -> None:
         from src.cache import hash_text
 
         text = "Hello world"
         expected = hashlib.sha256(text.encode()).hexdigest()[:16]
         assert hash_text(text) == expected
 
-    def test_whitespace_sensitive(self):
+    def test_whitespace_sensitive(self) -> None:
         from src.cache import hash_text
 
         assert hash_text("hello ") != hash_text("hello")
@@ -207,13 +212,13 @@ class TestHashText:
 
 
 class TestScriptCache:
-    def test_returns_none_when_absent(self, tmp_path, monkeypatch):
+    def test_returns_none_when_absent(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_script
 
         assert get_cached_script("my-lesson", "abc123") is None
 
-    def test_returns_path_when_present(self, tmp_path, monkeypatch):
+    def test_returns_path_when_present(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_script
 
@@ -224,7 +229,7 @@ class TestScriptCache:
         result = get_cached_script("my-lesson", "abc123")
         assert result == p
 
-    def test_save_creates_file_with_correct_content(self, tmp_path, monkeypatch):
+    def test_save_creates_file_with_correct_content(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_script_to_cache
 
@@ -235,7 +240,7 @@ class TestScriptCache:
         assert saved.exists()
         assert saved.read_text() == "# my script"
 
-    def test_save_filename_is_hash_with_py_suffix(self, tmp_path, monkeypatch):
+    def test_save_filename_is_hash_with_py_suffix(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_script_to_cache
 
@@ -245,7 +250,7 @@ class TestScriptCache:
         assert saved.name == "deadbeef.py"
         assert saved.parent.name == "script"
 
-    def test_save_then_get_roundtrip(self, tmp_path, monkeypatch):
+    def test_save_then_get_roundtrip(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_script, save_script_to_cache
 
@@ -257,7 +262,7 @@ class TestScriptCache:
         assert retrieved is not None
         assert retrieved.read_text() == "# roundtrip test"
 
-    def test_different_hashes_stored_independently(self, tmp_path, monkeypatch):
+    def test_different_hashes_stored_independently(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_script, save_script_to_cache
 
@@ -271,7 +276,7 @@ class TestScriptCache:
         assert get_cached_script("lesson", "hash_a").read_text() == "script one"  # type: ignore[union-attr]
         assert get_cached_script("lesson", "hash_b").read_text() == "script two"  # type: ignore[union-attr]
 
-    def test_wrong_hash_returns_none(self, tmp_path, monkeypatch):
+    def test_wrong_hash_returns_none(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_script, save_script_to_cache
 
@@ -288,20 +293,20 @@ class TestScriptCache:
 
 
 class TestAudioCacheHelpers:
-    def test_audio_cache_dir_path(self, tmp_path, monkeypatch):
+    def test_audio_cache_dir_path(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_audio_cache_dir
 
         d = get_audio_cache_dir("My Lesson")
         assert d == tmp_path / "my-lesson" / "audio"
 
-    def test_returns_none_when_absent(self, tmp_path, monkeypatch):
+    def test_returns_none_when_absent(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_audio
 
         assert get_cached_audio("lesson", "Hello world") is None
 
-    def test_save_uses_text_hash_as_filename(self, tmp_path, monkeypatch):
+    def test_save_uses_text_hash_as_filename(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import hash_text, save_audio_to_cache
 
@@ -313,7 +318,7 @@ class TestAudioCacheHelpers:
         assert saved.name == f"{hash_text(text)}.wav"
         assert saved.parent.name == "audio"
 
-    def test_save_preserves_file_bytes(self, tmp_path, monkeypatch):
+    def test_save_preserves_file_bytes(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_audio_to_cache
 
@@ -324,7 +329,7 @@ class TestAudioCacheHelpers:
         dest = save_audio_to_cache("lesson", "narration text", wav)
         assert dest.read_bytes() == content
 
-    def test_roundtrip(self, tmp_path, monkeypatch):
+    def test_roundtrip(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_audio, save_audio_to_cache
 
@@ -336,7 +341,7 @@ class TestAudioCacheHelpers:
         assert result is not None
         assert result.read_bytes() == b"fake-wav-bytes"
 
-    def test_different_texts_stored_independently(self, tmp_path, monkeypatch):
+    def test_different_texts_stored_independently(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_audio, save_audio_to_cache
 
@@ -350,7 +355,7 @@ class TestAudioCacheHelpers:
         assert get_cached_audio("lesson", "text one").read_bytes() == b"audio one"  # type: ignore[union-attr]
         assert get_cached_audio("lesson", "text two").read_bytes() == b"audio two"  # type: ignore[union-attr]
 
-    def test_wrong_text_returns_none(self, tmp_path, monkeypatch):
+    def test_wrong_text_returns_none(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_audio, save_audio_to_cache
 
@@ -367,13 +372,13 @@ class TestAudioCacheHelpers:
 
 
 class TestVideoCache:
-    def test_returns_none_when_absent(self, tmp_path, monkeypatch):
+    def test_returns_none_when_absent(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_video
 
         assert get_cached_video("lesson", "abc123") is None
 
-    def test_returns_path_when_present(self, tmp_path, monkeypatch):
+    def test_returns_path_when_present(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_video
 
@@ -384,7 +389,7 @@ class TestVideoCache:
         result = get_cached_video("lesson", "abc123")
         assert result == p
 
-    def test_save_filename_is_hash_with_mp4_suffix(self, tmp_path, monkeypatch):
+    def test_save_filename_is_hash_with_mp4_suffix(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_video_to_cache
 
@@ -395,7 +400,7 @@ class TestVideoCache:
         assert saved.name == "deadbeef.mp4"
         assert saved.parent.name == "video"
 
-    def test_save_in_correct_lesson_subdirectory(self, tmp_path, monkeypatch):
+    def test_save_in_correct_lesson_subdirectory(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_video_to_cache
 
@@ -406,7 +411,7 @@ class TestVideoCache:
         # lesson key normalisation: "My Lesson" → "my-lesson"
         assert saved.parts[-3] == "my-lesson"
 
-    def test_roundtrip(self, tmp_path, monkeypatch):
+    def test_roundtrip(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_video, save_video_to_cache
 
@@ -419,7 +424,7 @@ class TestVideoCache:
         assert retrieved is not None
         assert retrieved.read_bytes() == content
 
-    def test_wrong_hash_returns_none(self, tmp_path, monkeypatch):
+    def test_wrong_hash_returns_none(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_video, save_video_to_cache
 
@@ -438,7 +443,7 @@ class TestVideoCache:
 class TestCacheDirectoryLayout:
     """Verify that each asset type lands under the right sub-directory."""
 
-    def test_script_under_lesson_script_subdir(self, tmp_path, monkeypatch):
+    def test_script_under_lesson_script_subdir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_script_to_cache
 
@@ -448,7 +453,7 @@ class TestCacheDirectoryLayout:
         # .cache/lu-decomposition/script/h1.py
         assert saved.parts[-4:-1] == (tmp_path.name, "lu-decomposition", "script")
 
-    def test_audio_under_lesson_audio_subdir(self, tmp_path, monkeypatch):
+    def test_audio_under_lesson_audio_subdir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_audio_to_cache
 
@@ -458,7 +463,7 @@ class TestCacheDirectoryLayout:
         assert saved.parts[-2] == "audio"
         assert saved.parts[-3] == "lu-decomposition"
 
-    def test_video_under_lesson_video_subdir(self, tmp_path, monkeypatch):
+    def test_video_under_lesson_video_subdir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_video_to_cache
 
@@ -477,7 +482,7 @@ class TestCacheDirectoryLayout:
 class TestCreateWavAudioCache:
     """Tests for the cache-aware create_wav in audiomanager.py."""
 
-    def test_cache_hit_skips_engine(self, tmp_path, monkeypatch):
+    def test_cache_hit_skips_engine(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """When a cached WAV exists for the text, TTS is not called."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -499,7 +504,7 @@ class TestCreateWavAudioCache:
         assert (audio_out / "audio_1.wav").exists()
         assert duration == pytest.approx(2.0, abs=0.01)  # 1s audio + 1s buffer
 
-    def test_cache_hit_copies_wav_to_output(self, tmp_path, monkeypatch):
+    def test_cache_hit_copies_wav_to_output(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """The numbered audio_N.wav in the output dir matches the cached file."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -522,7 +527,7 @@ class TestCreateWavAudioCache:
         assert out_wav.exists()
         assert out_wav.read_bytes() == cached.read_bytes()
 
-    def test_cache_miss_calls_engine_and_saves_to_cache(self, tmp_path, monkeypatch):
+    def test_cache_miss_calls_engine_and_saves_to_cache(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """On a cache miss the engine is called and the WAV is stored in the cache."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -543,7 +548,7 @@ class TestCreateWavAudioCache:
         cached_path = cache_dir / f"{text_hash}.wav"
         assert cached_path.exists()
 
-    def test_cache_miss_cached_file_matches_output(self, tmp_path, monkeypatch):
+    def test_cache_miss_cached_file_matches_output(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """The file saved to cache must be byte-identical to the numbered output."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -563,7 +568,9 @@ class TestCreateWavAudioCache:
         cache_bytes = (cache_dir / f"{text_hash}.wav").read_bytes()
         assert out_bytes == cache_bytes
 
-    def test_same_text_different_engine_config_uses_separate_cache_entries(self, tmp_path, monkeypatch):
+    def test_same_text_different_engine_config_uses_separate_cache_entries(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """Changing TTS config for same text should not reuse stale cached audio."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -586,9 +593,9 @@ class TestCreateWavAudioCache:
 
         engine_a.synthesize.assert_called_once_with(text)
         engine_b.synthesize.assert_called_once_with(text)
-        assert len(list(cache_dir.glob("*.wav"))) == 2
+        assert len(list(cache_dir.glob("*.wav"))) == EXPECTED_CACHE_WAV_COUNT
 
-    def test_no_cache_dir_env_no_caching(self, tmp_path, monkeypatch):
+    def test_no_cache_dir_env_no_caching(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """Without AUDIO_CACHE_DIR the engine is always called and nothing is cached."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -605,7 +612,7 @@ class TestCreateWavAudioCache:
         hash_files = [f for f in audio_out.iterdir() if f.name != "audio_1.wav"]
         assert hash_files == []
 
-    def test_second_call_same_text_hits_cache(self, tmp_path, monkeypatch):
+    def test_second_call_same_text_hits_cache(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """The second call for the same text must read from cache, not call TTS again."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -636,7 +643,7 @@ class TestWorkflowCacheIntegration:
     """
 
     @pytest.fixture()
-    def patched_cache_dir(self, tmp_path, monkeypatch):
+    def patched_cache_dir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> Path:
         """Redirect both src.cache.CACHE_DIR and src.workflow.CACHE_DIR.
 
         Also neutralise INPUT_DIR auto-detection so pipeline tests compute
@@ -651,7 +658,9 @@ class TestWorkflowCacheIntegration:
         monkeypatch.setenv("TTS_ENGINE", "kokoro")
         return cache
 
-    def test_video_cache_hit_skips_llm_and_render(self, tmp_path, patched_cache_dir, monkeypatch):
+    def test_video_cache_hit_skips_llm_and_render(
+        self, tmp_path: Path, patched_cache_dir: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """If a cached video exists the pipeline copies it and returns immediately."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -686,7 +695,9 @@ class TestWorkflowCacheIntegration:
         assert final.read_bytes() == b"cached video bytes"
         assert result["cache_hit"] == "video"
 
-    def test_script_cache_hit_skips_script_generation(self, tmp_path, patched_cache_dir, monkeypatch):
+    def test_script_cache_hit_skips_script_generation(
+        self, tmp_path: Path, patched_cache_dir: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """If a cached script exists neither the script LLM nor the lesson-plan LLM is called."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -728,7 +739,9 @@ class TestWorkflowCacheIntegration:
         wf.script_generator.generate_and_save.assert_not_called()  # script is skipped
         mock_render.assert_called_once()  # render still runs
 
-    def test_fresh_run_render_called_with_lesson_name_and_hash(self, tmp_path, patched_cache_dir):
+    def test_fresh_run_render_called_with_lesson_name_and_hash(
+        self, tmp_path: Path, patched_cache_dir: Path
+    ) -> None:
         """On a cache miss render_and_merge receives lesson_name and context_hash."""
         from src.workflow import CourseWorkflow
 
@@ -744,11 +757,11 @@ class TestWorkflowCacheIntegration:
         ):
             wf = CourseWorkflow(model="test-model")
 
-            def _gen_save_effect(**kwargs):
+            def _gen_save_effect(**kwargs: object) -> None:
                 path = kwargs.get("output_path")
                 if path:
-                    Path(path).parent.mkdir(parents=True, exist_ok=True)
-                    Path(path).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                    Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
+                    Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
@@ -763,7 +776,9 @@ class TestWorkflowCacheIntegration:
         # Iterative renders use context_hash=None; caching happens via save_video_to_cache
         assert kwargs.get("context_hash") is None
 
-    def test_lesson_plan_stored_alongside_script_as_md(self, tmp_path, patched_cache_dir):
+    def test_lesson_plan_stored_alongside_script_as_md(
+        self, tmp_path: Path, patched_cache_dir: Path
+    ) -> None:
         """Lesson plan is written as {hash}.md next to {hash}.py in script/."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -788,11 +803,11 @@ class TestWorkflowCacheIntegration:
                 extra_context=wf._build_script_context(),
             )
 
-            def _gen_save_effect(**kwargs):
+            def _gen_save_effect(**kwargs: object) -> None:
                 path = kwargs.get("output_path")
                 if path:
-                    Path(path).parent.mkdir(parents=True, exist_ok=True)
-                    Path(path).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                    Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
+                    Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
@@ -808,7 +823,7 @@ class TestWorkflowCacheIntegration:
         # Must NOT write a stray lesson_plan.md at the per-lesson root
         assert not (patched_cache_dir / slug / "lesson_plan.md").exists()
 
-    def test_context_hash_changes_with_input_dir(self, tmp_path, patched_cache_dir):
+    def test_context_hash_changes_with_input_dir(self, tmp_path: Path, patched_cache_dir: Path) -> None:
         """Two runs with different input files produce different context hashes."""
         from src.cache import hash_context
 
@@ -838,7 +853,7 @@ class TestRenderAndMergeVideoSelection:
     was just written, not whatever rglob returns first.
     """
 
-    def _make_workflow(self):
+    def _make_workflow(self) -> object:
         with (
             patch("src.workflow.ChatOpenAI"),
             patch("src.workflow.ManimScriptGenerator"),
@@ -851,7 +866,7 @@ class TestRenderAndMergeVideoSelection:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
 
-    def test_selects_most_recently_modified_mp4(self, tmp_path, monkeypatch):
+    def test_selects_most_recently_modified_mp4(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """With multiple stale MP4s in the cache, the newest one must be used."""
         import time
 
@@ -893,9 +908,9 @@ class TestRenderAndMergeVideoSelection:
             # care about which video_path was found; capture it via VideoFileClip arg.
             # Actually that path is only used when audio exists, so we verify via the
             # copy path instead by checking which file gets copied.
-            copied = {}
+            copied: dict[str, Path] = {}
 
-            def fake_copy(src, dst):
+            def fake_copy(src: str, dst: str) -> None:
                 copied["src"] = Path(src)
 
             with patch("shutil.copy2", side_effect=fake_copy):
@@ -903,7 +918,7 @@ class TestRenderAndMergeVideoSelection:
 
         assert copied["src"] == new_mp4, f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
 
-    def test_single_mp4_is_always_selected(self, tmp_path, monkeypatch):
+    def test_single_mp4_is_always_selected(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """When only one MP4 exists it must be picked regardless of mtime."""
         manim_dir = tmp_path / "manim"
         audio_dir = tmp_path / "audio"
@@ -925,9 +940,9 @@ class TestRenderAndMergeVideoSelection:
             "_run_command_with_spinner",
             return_value=MagicMock(returncode=0),
         ):
-            copied = {}
+            copied: dict[str, Path] = {}
 
-            def fake_copy(src, dst):
+            def fake_copy(src: str, dst: str) -> None:
                 copied["src"] = Path(src)
 
             with patch("shutil.copy2", side_effect=fake_copy):
@@ -935,7 +950,7 @@ class TestRenderAndMergeVideoSelection:
 
         assert copied["src"] == only_mp4
 
-    def test_partial_movie_files_excluded(self, tmp_path, monkeypatch):
+    def test_partial_movie_files_excluded(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
         """MP4s under partial_movie_files/ must never be selected."""
         manim_dir = tmp_path / "manim"
         audio_dir = tmp_path / "audio"
