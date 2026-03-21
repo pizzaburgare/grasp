@@ -855,7 +855,7 @@ class TestRenderAndMergeVideoSelection:
 
     def _make_workflow(self) -> object:
         with (
-            patch("src.workflow.ChatOpenAI"),
+            patch("src.llm_metrics.ChatOpenAI"),
             patch("src.workflow.ManimScriptGenerator"),
         ):
             from src.workflow import CourseWorkflow

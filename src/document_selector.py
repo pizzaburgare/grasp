@@ -6,7 +6,6 @@ subset of files most relevant to the topic.
 """
 
 import logging
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -15,10 +14,9 @@ import yaml
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
-from src.llm_metrics import LLMUsage, extract_llm_usage
+from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
 from src.settings import DOCUMENT_SELECTOR_MODEL
 
 load_dotenv()
@@ -67,15 +65,7 @@ class _Selection(BaseModel):
 class DocumentSelectorAgent:
     def __init__(self, base_dir: Path, model: str | None = None) -> None:
         self.base_dir = base_dir.resolve()
-        self._llm = ChatOpenAI(
-            model=model or DOCUMENT_SELECTOR_MODEL,
-            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "Document Selector",
-            },
-        )
+        self._llm = make_openrouter_llm(model or DOCUMENT_SELECTOR_MODEL, title="Document Selector")
 
     def select(self, topic: str) -> tuple[list[Path], LLMUsage]:
         """Return (paths, usage) for files inside base_dir relevant to *topic*."""

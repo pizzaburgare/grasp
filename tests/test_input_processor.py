@@ -171,7 +171,7 @@ class TestGenerateLessonPlanFileLog:
         from src.workflow import CourseWorkflow
 
         with (
-            patch("src.workflow.ChatOpenAI"),
+            patch("src.llm_metrics.ChatOpenAI"),
             patch("src.workflow.ManimScriptGenerator"),
         ):
             wf = CourseWorkflow(model="test-model")

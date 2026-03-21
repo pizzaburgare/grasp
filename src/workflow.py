@@ -16,9 +16,7 @@ from typing import IO, Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from moviepy import AudioFileClip, VideoFileClip
-from pydantic import SecretStr
 
 from src.cache import (
     get_audio_cache_dir,
@@ -29,7 +27,7 @@ from src.cache import (
     save_video_to_cache,
 )
 from src.input_processor import process_input_dir
-from src.llm_metrics import LLMUsage, extract_llm_usage
+from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
 from src.paths import (
     CACHE_AUDIO_DIR,
     CACHE_DIR,
@@ -64,15 +62,7 @@ class CourseWorkflow:
         self.manim_model = manim_model
         self.review_model = review_model
 
-        self.planner_llm = ChatOpenAI(
-            model=planner_model,
-            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "Math Lesson Planner",
-            },
-        )
+        self.planner_llm = make_openrouter_llm(planner_model, title="Math Lesson Planner")
 
         self.script_generator = ManimScriptGenerator(
             generation_model=manim_model,

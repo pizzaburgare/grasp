@@ -2,9 +2,36 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+
+from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
+
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+_OPENROUTER_HTTP_REFERER = "http://localhost"
+
+
+def make_openrouter_llm(
+    model: str,
+    title: str,
+    temperature: float | None = None,
+) -> ChatOpenAI:
+    """Return a ChatOpenAI client pre-configured for the OpenRouter API."""
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "api_key": SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
+        "base_url": _OPENROUTER_BASE_URL,
+        "default_headers": {
+            "HTTP-Referer": _OPENROUTER_HTTP_REFERER,
+            "X-Title": title,
+        },
+    }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return ChatOpenAI(**kwargs)
 
 
 @dataclass(slots=True)
