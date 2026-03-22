@@ -1,4 +1,5 @@
 import ast
+import contextlib
 import logging
 import os
 import shutil
@@ -18,57 +19,71 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: Use existing library for spinner
-def run_command_with_spinner(
-    command: list[str],
-    env: dict[str, str],
-    status_label: str,
-) -> subprocess.CompletedProcess[str]:
-    spinner = ("|", "/", "-", "\\")
-    start = time.perf_counter()
-    process = subprocess.Popen(
-        command,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+class CommandRunner:
+    """Runs a subprocess with a terminal spinner and captures output."""
 
-    # Drain stdout/stderr on background threads to prevent the OS pipe
-    # buffer (~64 KB) from filling up and deadlocking the subprocess.
-    stdout_chunks: list[str] = []
-    stderr_chunks: list[str] = []
+    _SPINNER = ("|", "/", "-", "\\")
 
-    def _drain(pipe: IO[str], buf: list[str]) -> None:
-        for chunk in iter(lambda: pipe.read(4096), ""):
-            buf.append(chunk)
-
-    t_out = threading.Thread(target=_drain, args=(process.stdout, stdout_chunks), daemon=True)
-    t_err = threading.Thread(target=_drain, args=(process.stderr, stderr_chunks), daemon=True)
-    t_out.start()
-    t_err.start()
-
-    i = 0
-    while process.poll() is None:
-        elapsed = time.perf_counter() - start
-        print(
-            f"\r{status_label} {spinner[i % len(spinner)]} {elapsed:5.1f}s",
-            end="",
-            flush=True,
+    @staticmethod
+    def run(
+        command: list[str],
+        env: dict[str, str],
+        status_label: str,
+    ) -> subprocess.CompletedProcess[str]:
+        start = time.perf_counter()
+        process = subprocess.Popen(
+            command,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-        time.sleep(0.2)
-        i += 1
 
-    t_out.join()
-    t_err.join()
-    elapsed = time.perf_counter() - start
-    print(f"\r{status_label} ✓ {elapsed:5.1f}s")
+        # Drain stdout/stderr on background threads to prevent the OS pipe
+        # buffer (~64 KB) from filling up and deadlocking the subprocess.
+        stdout_chunks: list[str] = []
+        stderr_chunks: list[str] = []
 
-    return subprocess.CompletedProcess(
-        args=command,
-        returncode=process.returncode if process.returncode is not None else 1,
-        stdout="".join(stdout_chunks),
-        stderr="".join(stderr_chunks),
-    )
+        def _drain(pipe: IO[str], buf: list[str]) -> None:
+            for chunk in iter(lambda: pipe.read(4096), ""):
+                buf.append(chunk)
+
+        t_out = threading.Thread(target=_drain, args=(process.stdout, stdout_chunks), daemon=True)
+        t_err = threading.Thread(target=_drain, args=(process.stderr, stderr_chunks), daemon=True)
+        t_out.start()
+        t_err.start()
+
+        i = 0
+        while process.poll() is None:
+            elapsed = time.perf_counter() - start
+            print(
+                f"\r{status_label} {CommandRunner._SPINNER[i % len(CommandRunner._SPINNER)]} {elapsed:5.1f}s",
+                end="",
+                flush=True,
+            )
+            time.sleep(0.2)
+            i += 1
+
+        t_out.join()
+        t_err.join()
+        elapsed = time.perf_counter() - start
+        print(f"\r{status_label} ✓ {elapsed:5.1f}s")
+
+        result = subprocess.CompletedProcess(
+            args=command,
+            returncode=process.returncode if process.returncode is not None else 1,
+            stdout="".join(stdout_chunks),
+            stderr="".join(stderr_chunks),
+        )
+
+        if result.returncode != 0:
+            combined = (result.stderr or "").strip() or (result.stdout or "").strip()
+            if combined:
+                tail = "\n".join(combined.splitlines()[-30:])
+                print(f"{status_label} failed. Output (last 30 lines):")
+                print(tail)
+
+        return result
 
 
 def detect_scene_class(script_path: Path) -> str:
@@ -101,7 +116,15 @@ def detect_scene_class(script_path: Path) -> str:
     raise ValueError(f"No Scene subclass found in {script_path}")
 
 
-def render_and_merge(  # noqa: PLR0912
+def _find_rendered_video(cache_manim: Path) -> Path:
+    """Return the most recently modified MP4 under *cache_manim*, excluding partial files."""
+    mp4_files = [p for p in cache_manim.rglob("*.mp4") if "partial_movie_files" not in p.parts]
+    if not mp4_files:
+        raise FileNotFoundError(f"No MP4 found under {cache_manim} after render")
+    return max(mp4_files, key=lambda p: p.stat().st_mtime)
+
+
+def render_and_merge(
     script_path: Path,
     output_dir: Path,
     topic_slug: str,
@@ -123,24 +146,26 @@ def render_and_merge(  # noqa: PLR0912
     quality_label = "high" if final_quality else "low"
     print(f"Rendering scene: {scene_class} ({quality_label} quality)")
 
+    # Set up audio directories and environment.
+    # The Python variables are used for dir creation, cleanup, and caching;
+    # the env vars are forwarded to the Manim subprocess (TTS engine reads them).
+    env = os.environ.copy()
+    env["AUDIO_MANAGER_VERBOSE"] = "0"
     if lesson_name:
         audio_cache_dir = get_audio_cache_dir(lesson_name)
         audio_work_dir = audio_cache_dir / "work"
+        env["AUDIO_CACHE_DIR"] = str(audio_cache_dir)
     else:
         audio_cache_dir = CACHE_AUDIO_DIR
         audio_work_dir = CACHE_AUDIO_DIR
+    env["AUDIO_OUTPUT_DIR"] = str(audio_work_dir)
+
     cache_manim = CACHE_MANIM_DIR
     audio_cache_dir.mkdir(parents=True, exist_ok=True)
     audio_work_dir.mkdir(parents=True, exist_ok=True)
     cache_manim.mkdir(parents=True, exist_ok=True)
 
-    env = os.environ.copy()
-    env["AUDIO_OUTPUT_DIR"] = str(audio_work_dir)
-    env["AUDIO_MANAGER_VERBOSE"] = "0"
-    if lesson_name:
-        env["AUDIO_CACHE_DIR"] = str(audio_cache_dir)
-
-    result = run_command_with_spinner(
+    result = CommandRunner.run(
         command=[
             sys.executable,
             "-m",
@@ -155,19 +180,9 @@ def render_and_merge(  # noqa: PLR0912
         status_label="Compiling video",
     )
     if result.returncode != 0:
-        combined = (result.stderr or "").strip() or (result.stdout or "").strip()
-        if combined:
-            tail = "\n".join(combined.splitlines()[-30:])
-            print("Manim error output (last 30 lines):")
-            print(tail)
         raise RuntimeError("Manim render failed - check output above.")
 
-    # Find the rendered mp4 (exclude partial movie files)
-    # Sort by modification time and take the most recent to handle persistent cache
-    mp4_files = [p for p in cache_manim.rglob("*.mp4") if "partial_movie_files" not in p.parts]
-    if not mp4_files:
-        raise FileNotFoundError(f"No MP4 found under {cache_manim} after render")
-    video_path = max(mp4_files, key=lambda p: p.stat().st_mtime)
+    video_path = _find_rendered_video(cache_manim)
     print(f"Video rendered: {video_path}")
 
     # Merge audio
@@ -180,32 +195,22 @@ def render_and_merge(  # noqa: PLR0912
         shutil.copy2(video_path, final_path)
     else:
         print("Merging audio into video ...")
-        final_clip = None
-
-        # Suppress MoviePy verbose output during merge
         moviepy_logger = logging.getLogger("moviepy")
-        old_level = moviepy_logger.level
-        moviepy_logger.setLevel(logging.ERROR)
-        try:
+        with contextlib.ExitStack() as stack:
+            stack.callback(moviepy_logger.setLevel, moviepy_logger.level)
+            moviepy_logger.setLevel(logging.ERROR)
             video_clip = VideoFileClip(str(video_path))
-            try:
-                audio_clip = AudioFileClip(str(merged_audio))
-                try:
-                    final_clip = video_clip.with_audio(audio_clip)
-                    final_clip.write_videofile(
-                        str(final_path),
-                        codec="libx264",
-                        audio_codec="aac",
-                        logger=None,
-                    )
-                finally:
-                    if final_clip is not None and hasattr(final_clip, "close"):
-                        final_clip.close()
-                    audio_clip.close()
-            finally:
-                video_clip.close()
-        finally:
-            moviepy_logger.setLevel(old_level)
+            stack.callback(video_clip.close)
+            audio_clip = AudioFileClip(str(merged_audio))
+            stack.callback(audio_clip.close)
+            final_clip = video_clip.with_audio(audio_clip)
+            stack.callback(final_clip.close)
+            final_clip.write_videofile(
+                str(final_path),
+                codec="libx264",
+                audio_codec="aac",
+                logger=None,
+            )
 
     print(f"Final video: {final_path}")
 

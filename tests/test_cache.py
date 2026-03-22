@@ -892,10 +892,10 @@ class TestRenderAndMergeVideoSelection:
         script = tmp_path / "scene.py"
         script.write_text("from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n")
 
-        # Patch run_command_with_spinner to be a no-op (render already "done")
+        # Patch CommandRunner.run to be a no-op (render already "done")
         with (
             patch(
-                "src.rendering.run_command_with_spinner",
+                "src.rendering.CommandRunner.run",
                 return_value=MagicMock(returncode=0),
             ),
             patch("src.rendering.VideoFileClip"),
@@ -932,7 +932,7 @@ class TestRenderAndMergeVideoSelection:
         script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
 
         with patch(
-            "src.rendering.run_command_with_spinner",
+            "src.rendering.CommandRunner.run",
             return_value=MagicMock(returncode=0),
         ):
             copied: dict[str, Path] = {}
@@ -964,7 +964,7 @@ class TestRenderAndMergeVideoSelection:
 
         with (
             patch(
-                "src.rendering.run_command_with_spinner",
+                "src.rendering.CommandRunner.run",
                 return_value=MagicMock(returncode=0),
             ),
             pytest.raises(FileNotFoundError),
