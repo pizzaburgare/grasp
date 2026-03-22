@@ -62,6 +62,7 @@ exclude = [
     ".venv",
     "**/__pycache__",
     "**/.*",
+    "tests",
 ]
 
 [tool.pytest.ini_options]

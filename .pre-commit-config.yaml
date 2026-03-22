@@ -30,7 +30,7 @@ repos:
 
     -   id: check-file-length
         name: check file length (max 600 lines)
-        entry: python scripts/check_file_length.py
+        entry: uv run scripts/check_file_length.py
         language: system
         types: [python]
         exclude: ^tests/

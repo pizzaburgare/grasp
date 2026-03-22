@@ -480,7 +480,7 @@ Generate a complete Manim script that:
         for edit in fix.edits:
             search = edit.old_code if edit.old_code.endswith("\n") else edit.old_code + "\n"
             replace = edit.new_code if edit.new_code.endswith("\n") else edit.new_code + "\n"
-            patched = flexible_search_and_replace((search, replace, result))
+            patched = flexible_search_and_replace([search, replace, result])
             if patched is not None:
                 result = patched
                 applied += 1

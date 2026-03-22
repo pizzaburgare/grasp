@@ -58,7 +58,7 @@ class RelativeIndenter:
 
     def __init__(self, texts: list[str]) -> None:
         """Based on the texts, choose a unicode character that isn't in any of them."""
-        chars = set()
+        chars: set[str] = set()
         for text in texts:
             chars.update(text)
 
@@ -68,7 +68,7 @@ class RelativeIndenter:
         else:
             self.marker = self.select_unique_marker(chars)
 
-    def select_unique_marker(self, chars: str) -> str:
+    def select_unique_marker(self, chars: set[str]) -> str:
         for codepoint in range(0x10FFFF, 0x10000, -1):
             marker = chr(codepoint)
             if marker not in chars:
