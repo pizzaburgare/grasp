@@ -18,6 +18,8 @@ import numpy as np
 import pytest
 from pytest import MonkeyPatch
 
+from src.llm_metrics import LLMUsage
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -715,7 +717,7 @@ class TestWorkflowCacheIntegration:
                 "render_and_merge",
                 return_value=out_dir / "fourier-transform.mp4",
             ) as mock_render,
-            patch("src.cache.save_video_to_cache"),
+            patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
             # Script cache uses _build_script_context() (quality/TTS-independent)
@@ -732,7 +734,7 @@ class TestWorkflowCacheIntegration:
             (script_dir / f"{ctx_hash}.md").write_text("# cached plan")
 
             wf.script_generator = MagicMock()
-            wf.script_generator.review_video.return_value = (_cached_script, False)
+            wf.script_generator.review_video.return_value = (_cached_script, False, LLMUsage())
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         mock_plan.assert_not_called()  # lesson plan is skipped
@@ -751,23 +753,25 @@ class TestWorkflowCacheIntegration:
         fake_video = out_dir / f"{slug}.mp4"
 
         with (
-            patch.object(CourseWorkflow, "generate_lesson_plan", return_value="# plan"),
+            patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# plan", LLMUsage())),
             patch.object(CourseWorkflow, "render_and_merge", return_value=fake_video) as mock_render,
-            patch("src.cache.save_video_to_cache"),
+            patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
 
-            def _gen_save_effect(**kwargs: object) -> None:
+            def _gen_save_effect(**kwargs: object) -> LLMUsage:
                 path = kwargs.get("output_path")
                 if path:
                     Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
                     Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                return LLMUsage()
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
             wf.script_generator.review_video.return_value = (
                 "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
                 False,
+                LLMUsage(),
             )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
@@ -788,13 +792,13 @@ class TestWorkflowCacheIntegration:
         out_dir = tmp_path / "output"
 
         with (
-            patch.object(CourseWorkflow, "generate_lesson_plan", return_value="# my plan"),
+            patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# my plan", LLMUsage())),
             patch.object(
                 CourseWorkflow,
                 "render_and_merge",
                 return_value=out_dir / f"{slug}.mp4",
             ),
-            patch("src.cache.save_video_to_cache"),
+            patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
             # Script files are keyed by _build_script_context() hash
@@ -803,17 +807,19 @@ class TestWorkflowCacheIntegration:
                 extra_context=wf._build_script_context(),
             )
 
-            def _gen_save_effect(**kwargs: object) -> None:
+            def _gen_save_effect(**kwargs: object) -> LLMUsage:
                 path = kwargs.get("output_path")
                 if path:
                     Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
                     Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                return LLMUsage()
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
             wf.script_generator.review_video.return_value = (
                 "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
                 False,
+                LLMUsage(),
             )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 

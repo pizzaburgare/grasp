@@ -161,14 +161,12 @@ class ManimScriptGenerator:
         with open(VIDEO_FIX_PROMPT) as f:
             self.fix_prompt = f.read()
 
-        self.last_generation_usage: LLMUsage | None = None
-
     def generate_script(
         self,
         lesson_content: str,
         topic: str,
         input_parts: list[dict[str, Any]] | None = None,
-    ) -> str:
+    ) -> tuple[str, LLMUsage]:
         text = f"""Topic: {topic}
 
 Lesson Content:
@@ -199,8 +197,8 @@ Generate a complete Manim script that:
         ]
 
         response = self.llm.invoke(messages)
-        self.last_generation_usage = extract_llm_usage(response)
-        return self._clean_code_output(str(response.content))
+        usage = extract_llm_usage(response)
+        return self._clean_code_output(str(response.content)), usage
 
     def _clean_code_output(self, code: str) -> str:
         code = code.strip()
@@ -233,14 +231,14 @@ Generate a complete Manim script that:
         topic: str,
         output_path: str | Path,
         input_parts: list[dict[str, Any]] | None = None,
-    ) -> Path:
+    ) -> LLMUsage:
         print(f"Generating Manim script ({self.model}) ...")
-        script = self.generate_script(lesson_content, topic, input_parts)
+        script, usage = self.generate_script(lesson_content, topic, input_parts)
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(script)
         print(f"Script saved: {out}")
-        return out
+        return usage
 
     # ------------------------------------------------------------------
     # Iteration helpers
@@ -370,7 +368,7 @@ Generate a complete Manim script that:
         video_path: Path,
         topic: str,
         lesson_content: str,
-    ) -> tuple[str, bool]:
+    ) -> tuple[str, bool, LLMUsage]:
         """Review the rendered video for visual issues using structured output.
 
         Each frame is reviewed individually.  Only frames with issues are
@@ -384,7 +382,7 @@ Generate a complete Manim script that:
         frames = self._extract_video_frames(video_path)
         if not frames:
             print("  Could not extract frames - skipping review.")
-            return script, False
+            return script, False, LLMUsage()
 
         print(f"  Reviewing {len(frames)} unique frames one-by-one ...")
 
@@ -420,11 +418,9 @@ Generate a complete Manim script that:
                 status = "OK"
             print(f"  [{i}/{len(frames)}] {label}: {status}")
 
-        self.last_review_usage = total_usage
-
         if not flagged:
             print("  Video review: APPROVED - no issues found in any frame.")
-            return script, False
+            return script, False, total_usage
 
         # Aggregate all unique failed criteria across flagged frames
         all_failed: dict[str, None] = {}
@@ -439,7 +435,7 @@ Generate a complete Manim script that:
 
         flagged_frames = [(label, img_part, notes) for label, img_part, _, notes in flagged]
         fixed_script = self._fix_visual_issues(script, all_failed_list, flagged_frames, topic)
-        return fixed_script, True
+        return fixed_script, True, total_usage
 
     def _fix_visual_issues(
         self,
@@ -500,10 +496,10 @@ Generate a complete Manim script that:
         error_output: str,
         topic: str,
         lesson_content: str,
-    ) -> str:
+    ) -> tuple[str, LLMUsage]:
         """Ask the LLM to fix a script that failed to render.
 
-        Returns the corrected script.
+        Returns the corrected script and usage.
         """
         print("Sending compilation error to LLM for a fix ...")
 
@@ -529,5 +525,5 @@ Generate a complete Manim script that:
         ]
 
         response = self.llm.invoke(messages)
-        self.last_fix_usage = extract_llm_usage(response)
-        return self._clean_code_output(str(response.content))
+        usage = extract_llm_usage(response)
+        return self._clean_code_output(str(response.content)), usage
