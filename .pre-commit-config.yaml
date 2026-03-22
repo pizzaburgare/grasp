@@ -21,6 +21,13 @@ repos:
 
 -   repo: local
     hooks:
+    -   id: pytest
+        name: run tests (non-integration)
+        entry: uv run pytest -x -q -m "not integration"
+        language: system
+        types: [python]
+        pass_filenames: false
+
     -   id: check-file-length
         name: check file length (max 600 lines)
         entry: python scripts/check_file_length.py
