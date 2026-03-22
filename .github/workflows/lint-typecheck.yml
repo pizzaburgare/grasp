@@ -24,10 +24,10 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Install tooling
-        run: uv pip install --system ruff pyright
+        run: uv sync
 
       - name: Run Ruff
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Run Pyright
-        run: pyright .
+        run: uv run pyright .
