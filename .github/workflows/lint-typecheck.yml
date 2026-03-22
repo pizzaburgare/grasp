@@ -34,5 +34,9 @@ jobs:
       - name: Run Ruff
         run: uv run ruff check .
 
+
+      - name: Run Deptry (Dependency Check)
+        run: uv run deptry .
+
       - name: Run Pyright
         run: uv run pyright .

@@ -21,6 +21,14 @@ repos:
 
 -   repo: local
     hooks:
+    -   id: deptry
+        name: check dependencies (deptry)
+        entry: uv run deptry .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+
     -   id: pytest
         name: run tests (non-integration)
         entry: uv run pytest -x -q -m "not integration"

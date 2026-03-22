@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any
 
 try:
-    import git  # type: ignore[import-untyped]
+    import git
+    from git.exc import GitError, ODBError
 except ImportError:
     git = None  # type: ignore[assignment]
+    GitError = ODBError = Exception
 
 from diff_match_patch import diff_match_patch
 
@@ -381,7 +383,7 @@ def git_cherry_pick_osr_onto_o(texts: list[str]) -> str | None:
         # cherry pick R onto original
         try:
             repo.git.cherry_pick(replace_hash, "--minimal")
-        except (git.exc.ODBError, git.exc.GitError):
+        except (ODBError, GitError):
             # merge conflicts!
             return None
 
@@ -421,7 +423,7 @@ def git_cherry_pick_sr_onto_so(texts: list[str]) -> str | None:
         # cherry pick replace onto original
         try:
             repo.git.cherry_pick(replace_hash, "--minimal")
-        except (git.exc.ODBError, git.exc.GitError):
+        except (ODBError, GitError):
             # merge conflicts!
             return None
 
