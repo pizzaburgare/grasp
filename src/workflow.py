@@ -27,7 +27,7 @@ from src.cache import (
     lesson_name_to_key,
     save_video_to_cache,
 )
-from src.input_processor import process_input_dir
+from src.document_selector import DocumentSelectorAgent
 from src.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
 from src.paths import (
     CACHE_AUDIO_DIR,
@@ -37,6 +37,7 @@ from src.paths import (
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
+from src.preprocessing.batch_process import batch_process
 from src.script_generator import ManimScriptGenerator
 from src.settings import (
     DEFAULT_TTS_ENGINE,
@@ -133,15 +134,12 @@ class CourseWorkflow:
         self,
         topic: str,
         input_parts: list[dict[str, Any]] | None = None,
-        input_files: list[str] | None = None,
     ) -> tuple[str, LLMUsage]:
         print(f"Generating lesson plan for: {topic}")
-        if input_files:
-            print(f"  Using {len(input_files)} input file(s):")
-            for f in input_files:
-                print(f"    - {f}")
-        else:
+
+        if not input_parts:
             print("  No input files - using topic name only")
+
         print(f"Using model: {self.model}")
 
         system_content = self.lesson_prompt_template.replace("<topic>", topic)
@@ -512,18 +510,37 @@ class CourseWorkflow:
 
         # Process input materials
         input_parts: list[dict[str, Any]] | None = None
-        input_files: list[str] | None = None
+
         if input_dir:
             input_path = Path(input_dir)
-            input_files = [
-                f.relative_to(input_path).as_posix()
-                for f in sorted(input_path.rglob("*"))
-                if f.is_file() and not f.name.startswith(".")
-            ]
-            print("Processing input files ...")
-            input_parts = process_input_dir(input_dir)
-            image_count = sum(1 for p in input_parts if p["type"] == "image_url")
-            print(f"   {len(input_files)} file(s) → {image_count} image parts")
+
+            # If input points at a course directory, preprocess raw assets first.
+            raw_dir = (input_path / "raw").resolve()
+            processed_dir = (input_path / "processed").resolve()
+
+            assert raw_dir.is_dir(), f"Expected 'raw' subdirectory under {input_dir} for course inputs"
+
+            print("Preprocessing raw input files ...")
+            total_cost = batch_process(raw_dir, processed_dir)
+            selector_agent = DocumentSelectorAgent(processed_dir)
+
+            selected, selection_cost = selector_agent.select(topic)
+            cost_str = f"${selection_cost.cost_usd:.6f}" if selection_cost.cost_usd is not None else "n/a"
+
+            print(f"Selected files cost={cost_str}")
+            for path in selected:
+                print(f"  - {path.resolve().relative_to(processed_dir).as_posix()}")
+            input_parts = []
+            for path in selected:
+                rel_path = path.resolve().relative_to(processed_dir).as_posix()
+                input_parts.append(
+                    {
+                        "type": "text",
+                        "text": f"--- File: {rel_path} ---\n{path.read_text(errors='replace')}",
+                    }
+                )
+
+            print(f"{len(input_parts)} file(s), total LLM cost for preprocessing: ${total_cost:.4f}")
 
         # Steps 1+2: lesson plan + Manim script
         script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
@@ -535,7 +552,7 @@ class CourseWorkflow:
             tracker.record("Step 1 - Lesson planning", skipped=True)
             tracker.record("Step 2 - Script generation", skipped=True)
         else:
-            lesson, lesson_usage = self.generate_lesson_plan(topic, input_parts=input_parts, input_files=input_files)
+            lesson, lesson_usage = self.generate_lesson_plan(topic, input_parts=input_parts)
             tracker.record("Step 1 - Lesson planning", lesson_usage)
             lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
             lesson_plan_path.write_text(lesson)

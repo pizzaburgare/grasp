@@ -6,11 +6,9 @@ from pathlib import Path
 
 import yaml
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from markitdown import MarkItDown
-from pydantic import SecretStr
 
-from src.llm_metrics import extract_llm_usage
+from src.llm_metrics import extract_llm_usage, make_openrouter_llm
 from src.paths import PDF_TRANSCRIBER_PROMPT
 
 MIN_FENCE_LINES = 2
@@ -65,21 +63,13 @@ def local_pdf_conversion(input_path: str | Path, output_path: str | Path) -> Non
 def pdf_to_md_llm(
     input_path: str,
     output_path: str | None = None,
-    model: str = "google/gemini-2.0-flash-001",
+    model: str = "google/gemini-3-flash-preview",
 ) -> float:
     """
     Sends a PDF to an LLM, then generates a concise summary.
     Optionally writes Markdown with summary frontmatter to output_path.
     """
-    llm = ChatOpenAI(
-        model=model,
-        api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-        base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "PDF to Markdown",
-        },
-    )
+    llm = make_openrouter_llm(model, "PDF to Markdown")
 
     with open(input_path, "rb") as f:
         encoded = base64.standard_b64encode(f.read()).decode("utf-8")

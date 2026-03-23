@@ -62,8 +62,8 @@ if __name__ == "__main__":
     FILE = "courses/FMNF05/lectures/slides.pdf"
     if len(sys.argv) < MIN_ARGS:
         print(
-            "Usage:\n uv run preprocessing/extract_from_pdf.py --get-topics"
-            "uv run preprocessing/extract_from_pdf.py <topic_keyword>"
+            "Usage:\n uv run src/preprocessing/extract_from_pdf.py --get-topics"
+            "uv run src/preprocessing/extract_from_pdf.py <topic_keyword>"
         )
     elif sys.argv[1] == "--get-topics":
         for t in get_toc_topics(FILE):

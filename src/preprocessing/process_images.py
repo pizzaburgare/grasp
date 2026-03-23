@@ -1,13 +1,10 @@
 import base64
 import io
-import os
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from PIL import Image
-from pydantic import SecretStr
 
-from src.llm_metrics import extract_llm_usage
+from src.llm_metrics import extract_llm_usage, make_openrouter_llm
 from src.paths import IMAGE_TRANSCRIBER_PROMPT
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}
@@ -44,15 +41,7 @@ def image_to_md_llm(
     Sends an image to an LLM and returns a Markdown transcription.
     Optionally writes the result to output_path.
     """
-    llm = ChatOpenAI(
-        model=model,
-        api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-        base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "Image to Markdown",
-        },
-    )
+    llm = make_openrouter_llm(model=model, title="image-to-md")
 
     image_url = _prepare_image(input_path)
     transcriber_prompt = IMAGE_TRANSCRIBER_PROMPT.read_text(encoding="utf-8")
