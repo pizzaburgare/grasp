@@ -3,87 +3,16 @@ import contextlib
 import logging
 import os
 import shutil
-import subprocess
 import sys
-import threading
-import time
 from pathlib import Path
-from typing import IO
 
 from moviepy import AudioFileClip, VideoFileClip
 
 from src.cache import get_audio_cache_dir, get_lesson_cache_dir, save_video_to_cache
+from src.command_runner import CommandRunner
 from src.paths import CACHE_AUDIO_DIR, CACHE_MANIM_DIR
 
 logger = logging.getLogger(__name__)
-
-
-# TODO: Use existing library for spinner
-class CommandRunner:
-    """Runs a subprocess with a terminal spinner and captures output."""
-
-    _SPINNER = ("|", "/", "-", "\\")
-
-    @staticmethod
-    def run(
-        command: list[str],
-        env: dict[str, str],
-        status_label: str,
-    ) -> subprocess.CompletedProcess[str]:
-        start = time.perf_counter()
-        process = subprocess.Popen(
-            command,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        # Drain stdout/stderr on background threads to prevent the OS pipe
-        # buffer (~64 KB) from filling up and deadlocking the subprocess.
-        stdout_chunks: list[str] = []
-        stderr_chunks: list[str] = []
-
-        def _drain(pipe: IO[str], buf: list[str]) -> None:
-            for chunk in iter(lambda: pipe.read(4096), ""):
-                buf.append(chunk)
-
-        t_out = threading.Thread(target=_drain, args=(process.stdout, stdout_chunks), daemon=True)
-        t_err = threading.Thread(target=_drain, args=(process.stderr, stderr_chunks), daemon=True)
-        t_out.start()
-        t_err.start()
-
-        i = 0
-        while process.poll() is None:
-            elapsed = time.perf_counter() - start
-            print(
-                f"\r{status_label} {CommandRunner._SPINNER[i % len(CommandRunner._SPINNER)]} {elapsed:5.1f}s",
-                end="",
-                flush=True,
-            )
-            time.sleep(0.2)
-            i += 1
-
-        t_out.join()
-        t_err.join()
-        elapsed = time.perf_counter() - start
-        print(f"\r{status_label} ✓ {elapsed:5.1f}s")
-
-        result = subprocess.CompletedProcess(
-            args=command,
-            returncode=process.returncode if process.returncode is not None else 1,
-            stdout="".join(stdout_chunks),
-            stderr="".join(stderr_chunks),
-        )
-
-        if result.returncode != 0:
-            combined = (result.stderr or "").strip() or (result.stdout or "").strip()
-            if combined:
-                tail = "\n".join(combined.splitlines()[-30:])
-                print(f"{status_label} failed. Output (last 30 lines):")
-                print(tail)
-
-        return result
 
 
 def detect_scene_class(script_path: Path) -> str:
@@ -205,12 +134,7 @@ def render_and_merge(
             stack.callback(audio_clip.close)
             final_clip = video_clip.with_audio(audio_clip)
             stack.callback(final_clip.close)
-            final_clip.write_videofile(
-                str(final_path),
-                codec="libx264",
-                audio_codec="aac",
-                logger=None,
-            )
+            final_clip.write_videofile(str(final_path), codec="libx264", audio_codec="aac", logger=None, threads=4)
 
     print(f"Final video: {final_path}")
 
