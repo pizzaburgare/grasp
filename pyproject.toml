@@ -30,7 +30,6 @@ dependencies = [
     "diff-match-patch>=20241021",
     "pymupdf>=1.27.2",
     "gitpython>=3.1.46",
-    "codespell>=2.4.2",
 ]
 
 [project.scripts]
