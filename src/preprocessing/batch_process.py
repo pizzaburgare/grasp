@@ -1,9 +1,7 @@
-import os
 import shutil
-import tempfile
 from pathlib import Path
+from typing import Any
 
-from src.preprocessing.extract_from_pdf import extract_topic_pdf, get_toc_topics, safe_topic_name
 from src.preprocessing.process_images import image_to_md_llm
 from src.preprocessing.process_pdf import convert_pdf_to_md
 from src.preprocessing.process_video import mp4_to_text
@@ -16,7 +14,23 @@ def _already_processed(dest: Path) -> bool:
     return False
 
 
-def batch_process(input_dir: Path, output_dir: Path, local: bool = False) -> None:  # noqa: C901, PLR0912
+def _build_text_parts(processed_dir: Path) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    files = sorted(f for f in processed_dir.rglob("*") if f.is_file() and not f.name.startswith("."))
+
+    for file in files:
+        rel = file.relative_to(processed_dir)
+        text = file.read_text(errors="replace")
+        parts.append({"type": "text", "text": f"--- File: {rel} ---\n{text}"})
+
+    return parts
+
+
+def batch_process(
+    input_dir: Path,
+    output_dir: Path,
+    local: bool = False,
+) -> tuple[float, list[dict[str, Any]]]:
     input_root = input_dir
     output_root = output_dir
     output_root.mkdir(parents=True, exist_ok=True)
@@ -30,30 +44,18 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False) -> Non
         relative = file_path.relative_to(input_root)
         suffix = file_path.suffix.lower()
 
-        if suffix == ".md":
-            # If markdown, copy as is
-            dest = output_root / relative
-            if _already_processed(dest):
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
+        dest = output_root / relative.with_suffix(".md")
+        if _already_processed(dest):
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        if suffix in {".md", ".txt"}:
+            # If markdown or text, copy as is
             shutil.copy2(file_path, dest)
             print(f"Copied: {file_path} -> {dest}")
 
-        if suffix == ".txt":
-            # If text, copy as is
-            dest = output_root / relative
-            if _already_processed(dest):
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(file_path, dest)
-            print(f"Copied: {file_path} -> {dest}")
-
-        if suffix == ".mp4":
+        elif suffix == ".mp4":
             # If mp4, transcribe audio and save as txt with timestamps
-            dest = output_root / relative.with_suffix(".txt")
-            if _already_processed(dest):
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
             cost = mp4_to_text(str(file_path), str(dest))
             if cost > 0:
                 print(f"Processing video: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
@@ -61,41 +63,13 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False) -> Non
             print(f"Processing video: {file_path} -> {dest}")
 
         elif suffix == ".pdf":
-            topics = get_toc_topics(str(file_path))
-            if topics:
-                # Multi-topic PDF: extract and process each topic separately
-                for i, topic in enumerate(topics):
-                    safe = safe_topic_name(topic["title"])
-                    dest = output_root / relative.parent / f"{file_path.stem}__{safe}.md"
-                    if _already_processed(dest):
-                        continue
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pdf")
-                    os.close(tmp_fd)
-                    try:
-                        extract_topic_pdf(str(file_path), i, tmp_path)
-                        cost = convert_pdf_to_md(tmp_path, str(dest), local=local)
-                        if cost > 0:
-                            print(f"Processing PDF topic '{topic['title']}': {file_path} -> {dest} (LLM cost: ${cost:.4f})")
-                        total_cost += cost
-                    finally:
-                        os.unlink(tmp_path)
-            else:
-                # No TOC: process whole PDF normally
-                dest = output_root / relative.with_suffix(".md")
-                if _already_processed(dest):
-                    continue
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                cost = convert_pdf_to_md(str(file_path), str(dest), local=local)
-                if cost > 0:
-                    print(f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
-                total_cost += cost
+            # No TOC: process whole PDF normally
+            cost = convert_pdf_to_md(str(file_path), str(dest), local=local)
+            if cost > 0:
+                print(f"Processing PDF: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
+            total_cost += cost
         elif suffix in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}:
             # If image, convert to markdown using image_to_md_llm
-            dest = output_root / relative.with_suffix(".md")
-            if _already_processed(dest):
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
             cost = image_to_md_llm(str(file_path), str(dest))
             if cost > 0:
                 print(f"Processing Image: {file_path} -> {dest} (LLM cost: ${cost:.4f})")
@@ -104,6 +78,7 @@ def batch_process(input_dir: Path, output_dir: Path, local: bool = False) -> Non
             print(f"Unsupported file type (skipping): {file_path}")
 
     print(f"Batch processing complete. Total LLM cost: ${total_cost:.4f}")
+    return total_cost, _build_text_parts(output_root)
 
 
 if __name__ == "__main__":

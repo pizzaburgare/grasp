@@ -27,7 +27,6 @@ from src.cache import (
     lesson_name_to_key,
     save_video_to_cache,
 )
-from src.input_processor import process_input_dir
 from src.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
 from src.paths import (
     CACHE_AUDIO_DIR,
@@ -37,6 +36,7 @@ from src.paths import (
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
+from src.preprocessing.batch_process import batch_process
 from src.script_generator import ManimScriptGenerator
 from src.settings import (
     DEFAULT_TTS_ENGINE,
@@ -515,15 +515,23 @@ class CourseWorkflow:
         input_files: list[str] | None = None
         if input_dir:
             input_path = Path(input_dir)
+
+            # If input points at a course directory, preprocess raw assets first.
+            raw_dir = input_path / "raw"
+            processed_dir = input_path / "processed"
+
+            assert raw_dir.is_dir(), f"Expected 'raw' subdirectory under {input_dir} for course inputs"
+
+            print("Preprocessing raw input files ...")
+            total_cost, input_parts = batch_process(raw_dir, processed_dir)
+
             input_files = [
-                f.relative_to(input_path).as_posix()
-                for f in sorted(input_path.rglob("*"))
+                f.relative_to(processed_dir).as_posix()
+                for f in sorted(processed_dir.rglob("*"))
                 if f.is_file() and not f.name.startswith(".")
             ]
-            print("Processing input files ...")
-            input_parts = process_input_dir(input_dir)
-            image_count = sum(1 for p in input_parts if p["type"] == "image_url")
-            print(f"   {len(input_files)} file(s) → {image_count} image parts")
+
+            print(f"{len(input_files)} file(s), total LLM cost for preprocessing: ${total_cost:.4f}")
 
         # Steps 1+2: lesson plan + Manim script
         script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
