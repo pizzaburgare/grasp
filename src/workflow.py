@@ -27,6 +27,7 @@ from src.cache import (
     lesson_name_to_key,
     save_video_to_cache,
 )
+from src.document_selector import DocumentSelectorAgent
 from src.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
 from src.paths import (
     CACHE_AUDIO_DIR,
@@ -523,13 +524,24 @@ class CourseWorkflow:
             assert raw_dir.is_dir(), f"Expected 'raw' subdirectory under {input_dir} for course inputs"
 
             print("Preprocessing raw input files ...")
-            total_cost, input_parts = batch_process(raw_dir, processed_dir)
+            total_cost = batch_process(raw_dir, processed_dir)
+            selector_agent = DocumentSelectorAgent(processed_dir)
 
-            input_files = [
-                f.relative_to(processed_dir).as_posix()
-                for f in sorted(processed_dir.rglob("*"))
-                if f.is_file() and not f.name.startswith(".")
-            ]
+            selected, cost = selector_agent.select(topic)
+            input_files = []
+            input_parts = []
+            for path in selected:
+                rel_path = path.relative_to(processed_dir).as_posix()
+                input_files.append(rel_path)
+                input_parts.append(
+                    {
+                        "type": "text",
+                        "text": f"--- File: {rel_path} ---\n{path.read_text(errors='replace')}",
+                    }
+                )
+
+            cost_str = f"${cost.cost_usd:.6f}" if cost.cost_usd is not None else "n/a"
+            print(cost_str)
 
             print(f"{len(input_files)} file(s), total LLM cost for preprocessing: ${total_cost:.4f}")
 

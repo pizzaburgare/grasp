@@ -1,6 +1,5 @@
 import shutil
 from pathlib import Path
-from typing import Any
 
 from src.preprocessing.process_images import image_to_md_llm
 from src.preprocessing.process_pdf import convert_pdf_to_md
@@ -14,23 +13,11 @@ def _already_processed(dest: Path) -> bool:
     return False
 
 
-def _build_text_parts(processed_dir: Path) -> list[dict[str, Any]]:
-    parts: list[dict[str, Any]] = []
-    files = sorted(f for f in processed_dir.rglob("*") if f.is_file() and not f.name.startswith("."))
-
-    for file in files:
-        rel = file.relative_to(processed_dir)
-        text = file.read_text(errors="replace")
-        parts.append({"type": "text", "text": f"--- File: {rel} ---\n{text}"})
-
-    return parts
-
-
 def batch_process(
     input_dir: Path,
     output_dir: Path,
     local: bool = False,
-) -> tuple[float, list[dict[str, Any]]]:
+) -> float:
     input_root = input_dir
     output_root = output_dir
     output_root.mkdir(parents=True, exist_ok=True)
@@ -78,7 +65,7 @@ def batch_process(
             print(f"Unsupported file type (skipping): {file_path}")
 
     print(f"Batch processing complete. Total LLM cost: ${total_cost:.4f}")
-    return total_cost, _build_text_parts(output_root)
+    return total_cost
 
 
 if __name__ == "__main__":
