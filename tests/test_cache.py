@@ -741,9 +741,7 @@ class TestWorkflowCacheIntegration:
         wf.script_generator.generate_and_save.assert_not_called()  # script is skipped
         mock_render.assert_called_once()  # render still runs
 
-    def test_fresh_run_render_called_with_lesson_name_and_hash(
-        self, tmp_path: Path, patched_cache_dir: Path
-    ) -> None:
+    def test_fresh_run_render_called_with_lesson_name_and_hash(self, tmp_path: Path, patched_cache_dir: Path) -> None:
         """On a cache miss render_and_merge receives lesson_name and context_hash."""
         from src.workflow import CourseWorkflow
 
@@ -780,9 +778,7 @@ class TestWorkflowCacheIntegration:
         # Iterative renders use context_hash=None; caching happens via save_video_to_cache
         assert kwargs.get("context_hash") is None
 
-    def test_lesson_plan_stored_alongside_script_as_md(
-        self, tmp_path: Path, patched_cache_dir: Path
-    ) -> None:
+    def test_lesson_plan_stored_alongside_script_as_md(self, tmp_path: Path, patched_cache_dir: Path) -> None:
         """Lesson plan is written as {hash}.md next to {hash}.py in script/."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -861,7 +857,7 @@ class TestRenderAndMergeVideoSelection:
 
     def _make_workflow(self) -> object:
         with (
-            patch("src.workflow.ChatOpenAI"),
+            patch("src.llm_metrics.ChatOpenAI"),
             patch("src.workflow.ManimScriptGenerator"),
         ):
             from src.workflow import CourseWorkflow

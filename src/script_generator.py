@@ -5,7 +5,6 @@ Uses OpenRouter to generate Manim code from lesson plans
 
 import base64
 import io
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -13,12 +12,11 @@ from typing import Any
 import numpy as np
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from moviepy import VideoFileClip
 from PIL import Image
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
-from src.llm_metrics import LLMUsage, extract_llm_usage
+from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
 from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
 from src.search_replace import flexible_search_and_replace
 from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
@@ -121,36 +119,9 @@ class ManimScriptGenerator:
         self.review_model = review_model
         self.fix_model = fix_model
 
-        self.llm = ChatOpenAI(
-            model=generation_model,
-            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "Manim Script Generator",
-            },
-            temperature=0.7,
-        )
-
-        self.review_llm = ChatOpenAI(
-            model=review_model,
-            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "Manim Video Reviewer",
-            },
-        )
-
-        self.fix_llm = ChatOpenAI(
-            model=fix_model,
-            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "Manim Video Fixer",
-            },
-        )
+        self.llm = make_openrouter_llm(generation_model, title="Manim Script Generator", temperature=0.7)
+        self.review_llm = make_openrouter_llm(review_model, title="Manim Video Reviewer")
+        self.fix_llm = make_openrouter_llm(fix_model, title="Manim Video Fixer")
 
         with open(MANIM_PROMPT) as f:
             self.system_prompt = f.read()
