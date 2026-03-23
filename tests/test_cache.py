@@ -912,6 +912,7 @@ class TestRenderAndMergeVideoSelection:
 
             with patch("shutil.copy2", side_effect=fake_copy):
                 from src.rendering import render_and_merge
+
                 render_and_merge(script, out_dir, "new-scene")
 
         assert copied["src"] == new_mp4, f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
@@ -942,6 +943,7 @@ class TestRenderAndMergeVideoSelection:
 
             with patch("shutil.copy2", side_effect=fake_copy):
                 from src.rendering import render_and_merge
+
                 render_and_merge(script, out_dir, "my-scene")
 
         assert copied["src"] == only_mp4
@@ -970,4 +972,5 @@ class TestRenderAndMergeVideoSelection:
             pytest.raises(FileNotFoundError),
         ):
             from src.rendering import render_and_merge
+
             render_and_merge(script, out_dir, "my-scene")
