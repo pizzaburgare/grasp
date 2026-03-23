@@ -17,7 +17,7 @@ dependencies = [
     "moviepy>=2.2.1",
     "numpy>=2.4.2",
     "kokoro>=0.9.2",
-    "pillow>=11.0.0",
+    "pillow==11.0.0",
     "pydantic>=2.11.7",
     "piper-tts>=1.4.1",
     "qwen-tts>=0.1.0",
@@ -30,6 +30,7 @@ dependencies = [
     "diff-match-patch>=20241021",
     "pymupdf>=1.27.2",
     "gitpython>=3.1.46",
+    "pip>=26.0.1",
 ]
 
 [project.scripts]
