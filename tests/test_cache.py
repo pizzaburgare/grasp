@@ -18,6 +18,8 @@ import numpy as np
 import pytest
 from pytest import MonkeyPatch
 
+from src.llm_metrics import LLMUsage
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -715,7 +717,7 @@ class TestWorkflowCacheIntegration:
                 "render_and_merge",
                 return_value=out_dir / "fourier-transform.mp4",
             ) as mock_render,
-            patch("src.cache.save_video_to_cache"),
+            patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
             # Script cache uses _build_script_context() (quality/TTS-independent)
@@ -732,16 +734,14 @@ class TestWorkflowCacheIntegration:
             (script_dir / f"{ctx_hash}.md").write_text("# cached plan")
 
             wf.script_generator = MagicMock()
-            wf.script_generator.review_video.return_value = (_cached_script, False)
+            wf.script_generator.review_video.return_value = (_cached_script, False, LLMUsage())
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         mock_plan.assert_not_called()  # lesson plan is skipped
         wf.script_generator.generate_and_save.assert_not_called()  # script is skipped
         mock_render.assert_called_once()  # render still runs
 
-    def test_fresh_run_render_called_with_lesson_name_and_hash(
-        self, tmp_path: Path, patched_cache_dir: Path
-    ) -> None:
+    def test_fresh_run_render_called_with_lesson_name_and_hash(self, tmp_path: Path, patched_cache_dir: Path) -> None:
         """On a cache miss render_and_merge receives lesson_name and context_hash."""
         from src.workflow import CourseWorkflow
 
@@ -751,23 +751,25 @@ class TestWorkflowCacheIntegration:
         fake_video = out_dir / f"{slug}.mp4"
 
         with (
-            patch.object(CourseWorkflow, "generate_lesson_plan", return_value="# plan"),
+            patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# plan", LLMUsage())),
             patch.object(CourseWorkflow, "render_and_merge", return_value=fake_video) as mock_render,
-            patch("src.cache.save_video_to_cache"),
+            patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
 
-            def _gen_save_effect(**kwargs: object) -> None:
+            def _gen_save_effect(**kwargs: object) -> LLMUsage:
                 path = kwargs.get("output_path")
                 if path:
                     Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
                     Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                return LLMUsage()
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
             wf.script_generator.review_video.return_value = (
                 "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
                 False,
+                LLMUsage(),
             )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
@@ -776,9 +778,7 @@ class TestWorkflowCacheIntegration:
         # Iterative renders use context_hash=None; caching happens via save_video_to_cache
         assert kwargs.get("context_hash") is None
 
-    def test_lesson_plan_stored_alongside_script_as_md(
-        self, tmp_path: Path, patched_cache_dir: Path
-    ) -> None:
+    def test_lesson_plan_stored_alongside_script_as_md(self, tmp_path: Path, patched_cache_dir: Path) -> None:
         """Lesson plan is written as {hash}.md next to {hash}.py in script/."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -788,13 +788,13 @@ class TestWorkflowCacheIntegration:
         out_dir = tmp_path / "output"
 
         with (
-            patch.object(CourseWorkflow, "generate_lesson_plan", return_value="# my plan"),
+            patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# my plan", LLMUsage())),
             patch.object(
                 CourseWorkflow,
                 "render_and_merge",
                 return_value=out_dir / f"{slug}.mp4",
             ),
-            patch("src.cache.save_video_to_cache"),
+            patch("src.workflow.save_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
             # Script files are keyed by _build_script_context() hash
@@ -803,17 +803,19 @@ class TestWorkflowCacheIntegration:
                 extra_context=wf._build_script_context(),
             )
 
-            def _gen_save_effect(**kwargs: object) -> None:
+            def _gen_save_effect(**kwargs: object) -> LLMUsage:
                 path = kwargs.get("output_path")
                 if path:
                     Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
                     Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                return LLMUsage()
 
             wf.script_generator = MagicMock()
             wf.script_generator.generate_and_save.side_effect = _gen_save_effect
             wf.script_generator.review_video.return_value = (
                 "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
                 False,
+                LLMUsage(),
             )
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 

@@ -10,17 +10,15 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.13"
 dependencies = [
-    "fastmcp>=3.0.2",
-    "langchain>=1.2.10",
+    "langchain-core>=1.1.0",
     "langchain-openai>=1.1.10",
-    "langgraph>=1.0.10",
     "manim>=0.20.1",
+    "matplotlib>=3.10.0",
     "moviepy>=2.2.1",
     "numpy>=2.4.2",
-    "openai>=2.24.0",
-    "pillow>=11.0.0",
-    "pre-commit>=4.5.1",
     "kokoro>=0.9.2",
+    "pillow>=11.0.0",
+    "pydantic>=2.11.7",
     "piper-tts>=1.4.1",
     "qwen-tts>=0.1.0",
     "torch>=2.3.0",
@@ -28,12 +26,10 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "markitdown[pdf]>=0.1.5",
     "pyyaml>=6.0.2",
-    "pyreadline3>=3.5.4",
     "openai-whisper>=20250625",
     "diff-match-patch>=20241021",
-    "pip>=26.0.1",
     "pymupdf>=1.27.2",
-    "types-pyyaml>=6.0.12.20250915",
+    "gitpython>=3.1.46",
 ]
 
 [project.scripts]
@@ -44,9 +40,12 @@ packages = ["src"]
 
 [dependency-groups]
 dev = [
+    "deptry>=0.25.1",
+    "pre-commit>=4.5.1",
     "pytest>=8.0.0",
     "pyright>=1.1.0",
     "ruff>=0.15.4",
+    "types-pyyaml>=6.0.12.20250915",
 ]
 
 [tool.pyright]
@@ -62,6 +61,7 @@ exclude = [
     ".venv",
     "**/__pycache__",
     "**/.*",
+    "tests",
 ]
 
 [tool.pytest.ini_options]

@@ -7,12 +7,25 @@ repos:
     -   id: check-yaml
     -   id: check-added-large-files
 
+    # Built in hooks
+    -   id: check-toml
+    -   id: check-merge-conflict
+    -   id: debug-statements
+
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.7
     hooks:
     -   id: ruff
         args: [--fix]
     -   id: ruff-format
+
+-   repo: https://github.com/codespell-project/codespell
+    rev: v2.4.2
+    hooks:
+    -   id: codespell
+        files: ^src/
+        additional_dependencies:
+        - tomli
 
 -   repo: https://github.com/RobertCraigie/pyright-python
     rev: v1.1.408
@@ -21,9 +34,24 @@ repos:
 
 -   repo: local
     hooks:
+    -   id: deptry
+        name: check dependencies (deptry)
+        entry: uv run deptry .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+
+    -   id: pytest
+        name: run tests (non-integration)
+        entry: uv run pytest -x -q -m "not integration"
+        language: system
+        types: [python]
+        pass_filenames: false
+
     -   id: check-file-length
         name: check file length (max 600 lines)
-        entry: python scripts/check_file_length.py
+        entry: uv run scripts/check_file_length.py
         language: system
         types: [python]
         exclude: ^tests/
