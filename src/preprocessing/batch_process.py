@@ -3,10 +3,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from preprocessing.extract_from_pdf import extract_topic_pdf, get_toc_topics, safe_topic_name
-from preprocessing.process_images import image_to_md_llm
-from preprocessing.process_pdf import convert_pdf_to_md
-from preprocessing.process_video import mp4_to_text
+from src.preprocessing.extract_from_pdf import extract_topic_pdf, get_toc_topics, safe_topic_name
+from src.preprocessing.process_images import image_to_md_llm
+from src.preprocessing.process_pdf import convert_pdf_to_md
+from src.preprocessing.process_video import mp4_to_text
 
 
 def _already_processed(dest: Path) -> bool:

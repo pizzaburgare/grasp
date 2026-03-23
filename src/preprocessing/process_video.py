@@ -100,9 +100,9 @@ def mp4_to_text(video_path: str, output_path: str) -> float:
     output = ""
     for time, line in zip(times, lines, strict=False):
         output += f"{line.strip()}\n"
-        cost, desctiption = _describe_frame(video_path, time)
+        cost, description = _describe_frame(video_path, time)
         total_cost += cost
-        output += desctiption + "\n"
+        output += description + "\n"
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(output)

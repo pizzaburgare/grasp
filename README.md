@@ -168,19 +168,19 @@ Before generating a lesson, raw course materials can be batch-preprocessed into 
 | `.md`, `.txt` | Copied as-is |
 
 ```bash
-uv run preprocessing/batch_process.py <directory>
+uv run src/preprocessing/batch_process.py <directory>
 ```
 
 `<directory>` should be a course folder that contains a `raw/` subdirectory, e.g.:
 
 ```bash
-uv run preprocessing/batch_process.py courses/FMNF05
+uv run src/preprocessing/batch_process.py courses/FMNF05
 ```
 
 Use local (non-LLM) PDF conversion:
 
 ```bash
-uv run preprocessing/batch_process.py courses/FMNF05 --local
+uv run src/preprocessing/batch_process.py courses/FMNF05 --local
 ```
 
 Processed files are written to `<directory>/processed/`, mirroring the original folder structure. Existing non-empty outputs are skipped.

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from src.paths import EXAM_CLASSIFIER_PROMPT
+from src.paths import EXAM_CLASSIFIER_PROMPT, EXAM_PROMPT
 
 
 def create_agent(model: str = "google/gemini-2.0-flash-001") -> ChatOpenAI:
@@ -65,8 +65,7 @@ def parse_llm_object(llm_output: str) -> dict[str, list[str]]:
 
 def extract_topics(exam_dir: str, llm: ChatOpenAI) -> list[str]:
     """Pass all exam content to the LLM and get back a master list of topics."""
-    prompt_path = Path(__file__).parent / "exams" / "exam_prompt.md"
-    prompt_template = prompt_path.read_text(encoding="utf-8")
+    prompt_template = EXAM_PROMPT.read_text(encoding="utf-8")
 
     joined_exams = ""
     for filename in sorted(os.listdir(exam_dir)):
