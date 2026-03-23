@@ -3,25 +3,10 @@ import json
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
 
+from src.llm_metrics import make_openrouter_llm
 from src.paths import EXAM_CLASSIFIER_PROMPT, EXAM_PROMPT
-
-
-def create_agent(model: str = "google/gemini-2.0-flash-001") -> ChatOpenAI:
-    load_dotenv()
-    return ChatOpenAI(
-        model=model,
-        api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-        base_url="https://openrouter.ai/api/v1",
-        default_headers={
-            "HTTP-Referer": "http://localhost",
-            "X-Title": "Rag",
-        },
-        temperature=0.7,
-    )
 
 
 def llm_invoke(llm: ChatOpenAI, prompt: str) -> str:
@@ -174,7 +159,7 @@ if __name__ == "__main__":
         if not args.exam_dir:
             parser.error("exam_dir is required when --input-json is not provided")
 
-        llm = create_agent(model=args.model)
+        llm = make_openrouter_llm(model=args.model, title="Exam Analyzer")
 
         print("--- STEP 1: Extracting global topics from all exams ---")
         topics = extract_topics(str(args.exam_dir), llm)

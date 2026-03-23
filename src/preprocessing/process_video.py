@@ -1,16 +1,13 @@
 import base64
 import io
-import os
 import tempfile
 
 import whisper  # pyright: ignore
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from moviepy import VideoFileClip  # type: ignore
 from PIL import Image
-from pydantic import SecretStr
 
-from src.llm_metrics import extract_llm_usage
+from src.llm_metrics import extract_llm_usage, make_openrouter_llm
 
 
 def _extract_audio(video_path: str, output_path: str) -> None:
@@ -48,15 +45,7 @@ def _describe_frame(video_path: str, timestamp: float, model: str = "google/gemi
         img.save(buf, format="JPEG", quality=70)
         data = base64.b64encode(buf.getvalue()).decode()
 
-        llm = ChatOpenAI(
-            model=model,
-            api_key=SecretStr(os.getenv("OPENROUTER_API_KEY") or ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "http://localhost",
-                "X-Title": "Video Frame Describer",
-            },
-        )
+        llm = make_openrouter_llm(model=model, title="Video Frame Describer")
 
         messages = [
             SystemMessage(content="You are a helpful assistant that describes images."),
