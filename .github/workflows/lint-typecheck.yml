@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   quality-checks:
@@ -33,6 +36,10 @@ jobs:
 
       - name: Run Ruff
         run: uv run ruff check .
+
+
+      - name: Run Deptry (Dependency Check)
+        run: uv run deptry .
 
       - name: Run Pyright
         run: uv run pyright .
