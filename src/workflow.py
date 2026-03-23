@@ -528,6 +528,9 @@ class CourseWorkflow:
             selector_agent = DocumentSelectorAgent(processed_dir)
 
             selected, cost = selector_agent.select(topic)
+            print("Selected files:")
+            for path in selected:
+                print(f"  - {path.relative_to(processed_dir).as_posix()}")
             input_files = []
             input_parts = []
             for path in selected:
