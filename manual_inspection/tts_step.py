@@ -61,7 +61,8 @@ print()
 print("3. Generating audio...")
 gen_start = time.time()
 duration = create_wav(
-    "Hello! This is a test of the text to speech system. The quick brown fox jumps over the lazy dog.",
+    "Hello! This is a test of the text to speech system. "
+    "The quick brown fox jumps over the lazy dog.",
     999,
     engine,
 )
