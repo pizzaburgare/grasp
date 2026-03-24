@@ -297,8 +297,32 @@ Generate a complete Manim script that:
             clip.close()
 
     @staticmethod
+    def _select_settled_ssim_frames(video_path: Path) -> list[tuple[float, np.ndarray]]:
+        """Existing production selection: settled scan + SSIM dedup + subsample."""
+        candidates = ManimScriptGenerator._scan_settled_frames(video_path)
+        if not candidates:
+            return []
+
+        deduped: list[tuple[float, np.ndarray]] = [candidates[0]]
+        for ts, frame in candidates[1:]:
+            if ManimScriptGenerator._frame_similarity(deduped[-1][1], frame) < _HIGH_SSIM_THRESHOLD:
+                deduped.append((ts, frame))
+
+        if len(deduped) <= _REVIEW_TARGET_FRAMES:
+            return deduped
+
+        step = len(deduped) / _REVIEW_TARGET_FRAMES
+        indices = list(
+            dict.fromkeys(
+                min(round(i * step), len(deduped) - 1) for i in range(_REVIEW_TARGET_FRAMES)
+            )
+        )
+        return [deduped[i] for i in indices]
+
+    @staticmethod
     def _extract_video_frames(
         video_path: Path,
+        algorithm: str = "settled-ssim",
     ) -> list[tuple[str, dict[str, Any]]]:
         """Sample frames from a video, preferring moments after animations settle.
 
@@ -312,36 +336,24 @@ Generate a complete Manim script that:
            skip any frame with SSIM ≥ 0.99 vs. the previous kept frame.
         3. Evenly subsample to at most ``_REVIEW_TARGET_FRAMES``.
         4. JPEG-encode the final frames.
+
+                Algorithms:
+                - ``settled-ssim`` (default): existing settle + SSIM dedup flow.
         """
-        candidates = ManimScriptGenerator._scan_settled_frames(video_path)
-        if not candidates:
-            return []
+        selectors: dict[str, Any] = {
+            "settled-ssim": ManimScriptGenerator._select_settled_ssim_frames,
+        }
+        selector = selectors.get(algorithm)
+        if selector is None:
+            raise ValueError(f"Unknown frame extraction algorithm: {algorithm}")
 
-        # ----------------------------------------------------------
-        # SSIM dedup (sequential, 0.99 threshold)
-        # ----------------------------------------------------------
-        deduped: list[tuple[float, np.ndarray]] = [candidates[0]]
-        for ts, frame in candidates[1:]:
-            if ManimScriptGenerator._frame_similarity(deduped[-1][1], frame) < _HIGH_SSIM_THRESHOLD:
-                deduped.append((ts, frame))
-
-        # ----------------------------------------------------------
-        # Evenly subsample to target
-        # ----------------------------------------------------------
-        if len(deduped) > _REVIEW_TARGET_FRAMES:
-            step = len(deduped) / _REVIEW_TARGET_FRAMES
-            indices = list(
-                dict.fromkeys(
-                    min(round(i * step), len(deduped) - 1) for i in range(_REVIEW_TARGET_FRAMES)
-                )
-            )
-            deduped = [deduped[i] for i in indices]
+        selected = selector(video_path)
 
         # ----------------------------------------------------------
         # JPEG-encode the final frames
         # ----------------------------------------------------------
         parts: list[tuple[str, dict[str, Any]]] = []
-        for chosen_t, frame in deduped:
+        for chosen_t, frame in selected:
             img = Image.fromarray(frame)  # type: ignore[arg-type]
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
