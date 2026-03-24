@@ -52,7 +52,7 @@ dev = [
 
 # Deptry
 [tool.deptry.per_rule_ignores]
-DEP002 = ["pylint"]
+DEP002 = ["pylint","en-core-web-sm"]
 
 # Pyright
 [tool.pyright]
