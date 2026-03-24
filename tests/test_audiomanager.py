@@ -101,7 +101,9 @@ class TestCreateWav:
 
 
 class TestQwenTTSEngine:
-    def test_passes_speaker_and_language_to_model(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_passes_speaker_and_language_to_model(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
         mock_raw_model = MagicMock()
         mock_raw_model.model.tts_model_type = "custom_voice"
@@ -207,7 +209,9 @@ class TestQwenTTSEngine:
 
 
 class TestPiperTTSEngine:
-    def _make_mock_voice(self, sr: int = PIPER_DEFAULT_SR, n_frames: int = PIPER_DEFAULT_SR) -> MagicMock:
+    def _make_mock_voice(
+        self, sr: int = PIPER_DEFAULT_SR, n_frames: int = PIPER_DEFAULT_SR
+    ) -> MagicMock:
         """Return a mock PiperVoice that writes known PCM to a wave file handle."""
 
         def _fake_synthesize(text: str, wav_file: wave.Wave_write) -> None:
@@ -260,7 +264,9 @@ class TestPiperTTSEngine:
         from src.tts.piper import PiperTTSEngine
 
         engine = PiperTTSEngine(model_path="/fake/model.onnx")
-        with patch.object(engine, "_load_voice", return_value=self._make_mock_voice(sr=PIPER_ALT_SR)):
+        with patch.object(
+            engine, "_load_voice", return_value=self._make_mock_voice(sr=PIPER_ALT_SR)
+        ):
             _, sr = engine.synthesize("Rate test")
 
         assert sr == PIPER_ALT_SR
@@ -307,7 +313,9 @@ class TestAudioManager:
         assert mgr.times[0] == pytest.approx(1.5)
         assert len(mgr.audio_durations) == 1
 
-    def test_done_say_waits_for_remaining_audio(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_done_say_waits_for_remaining_audio(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
         scene = self._make_scene(time=0.0)
         audio = np.zeros(SAMPLE_RATE * 3, dtype=np.float32)
@@ -321,7 +329,9 @@ class TestAudioManager:
         scene.wait.assert_called_once()
         assert scene.wait.call_args[0][0] == pytest.approx(3.0, abs=0.1)
 
-    def test_done_say_skips_wait_when_already_finished(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_done_say_skips_wait_when_already_finished(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
         scene = self._make_scene(time=0.0)
         engine = _make_mock_engine()
@@ -343,7 +353,9 @@ class TestAudioManager:
         mgr.done_say()
         scene.wait.assert_not_called()
 
-    def test_merge_audio_creates_merged_file(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_merge_audio_creates_merged_file(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AUDIO_OUTPUT_DIR", str(tmp_path))
         scene = self._make_scene(time=0.0)
         engine = _make_mock_engine()

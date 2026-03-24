@@ -33,7 +33,9 @@ def parse_llm_list(llm_output: str) -> list[str]:
         try:
             return ast.literal_eval(cleaned)
         except (SyntaxError, ValueError):
-            print("Warning: Could not parse topic list as JSON/Python. Falling back to comma split.")
+            print(
+                "Warning: Could not parse topic list as JSON/Python. Falling back to comma split."
+            )
             return [t.strip() for t in cleaned.split(",") if t.strip()]
 
 
@@ -101,7 +103,9 @@ def classify_exams(exam_dir: str, topics: list[str], llm: ChatOpenAI) -> dict[st
     return results
 
 
-def invert_to_topic_map(exam_topic_map: dict[str, list[str]], all_topics: list[str]) -> dict[str, list[str]]:
+def invert_to_topic_map(
+    exam_topic_map: dict[str, list[str]], all_topics: list[str]
+) -> dict[str, list[str]]:
     """Invert {exam_stem: [topics]} → {topic: [exam_dates]}."""
     # Exam stems are like "2024_08_21"; convert to "2024-08-21"
     result: dict[str, list[str]] = {topic: [] for topic in all_topics}
@@ -127,7 +131,9 @@ def sort_by_frequency(topic_map: dict[str, list[str]]) -> dict[str, int]:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Analyze past exams and produce a topic → exam-dates mapping.")
+    parser = argparse.ArgumentParser(
+        description="Analyze past exams and produce a topic → exam-dates mapping."
+    )
     parser.add_argument(
         "exam_dir",
         type=Path,
@@ -138,7 +144,10 @@ if __name__ == "__main__":
         "--input-json",
         type=Path,
         default=None,
-        help="Existing JSON file (output format) to sort by frequency instead of running LLM analysis",
+        help=(
+            "Existing JSON file (output format) to sort by frequency "
+            "instead of running LLM analysis"
+        ),
     )
     parser.add_argument(
         "--output",

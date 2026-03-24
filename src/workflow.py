@@ -264,7 +264,9 @@ class CourseWorkflow:
             input_dir = str(INPUT_DIR)
 
         script_hash = hash_context(topic, input_dir, extra_context=self._build_script_context())
-        video_hash = hash_context(topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality))
+        video_hash = hash_context(
+            topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality)
+        )
 
         _print_pipeline_header(topic, self, tts_engine, input_dir, out, script_hash, video_hash)
         tracker = UsageTracker()
@@ -303,14 +305,18 @@ class CourseWorkflow:
             raw_dir = (input_path / "raw").resolve()
             processed_dir = (input_path / "processed").resolve()
 
-            assert raw_dir.is_dir(), f"Expected 'raw' subdirectory under {input_dir} for course inputs"
+            assert raw_dir.is_dir(), (
+                f"Expected 'raw' subdirectory under {input_dir} for course inputs"
+            )
 
             print("Preprocessing raw input files ...")
             total_cost = batch_process(raw_dir, processed_dir)
             selector_agent = DocumentSelectorAgent(processed_dir)
 
             selected, selection_cost = selector_agent.select(topic)
-            cost_str = f"${selection_cost.cost_usd:.6f}" if selection_cost.cost_usd is not None else "n/a"
+            cost_str = (
+                f"${selection_cost.cost_usd:.6f}" if selection_cost.cost_usd is not None else "n/a"
+            )
 
             print(f"Selected files cost={cost_str}")
             for path in selected:
@@ -325,7 +331,9 @@ class CourseWorkflow:
                     }
                 )
 
-            print(f"{len(input_parts)} file(s), total LLM cost for preprocessing: ${total_cost:.4f}")
+            print(
+                f"{len(input_parts)} file(s), total LLM cost for preprocessing: ${total_cost:.4f}"
+            )
 
         # Steps 1+2: lesson plan + Manim script
         script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
@@ -353,7 +361,9 @@ class CourseWorkflow:
         print()
 
         # Step 3: Render + review loop
-        final_video = self._render_loop(topic, lesson, slug, script_path, out, video_hash, final_quality, skip_review, tracker)
+        final_video = self._render_loop(
+            topic, lesson, slug, script_path, out, video_hash, final_quality, skip_review, tracker
+        )
 
         print()
         print("=" * 60)

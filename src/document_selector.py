@@ -35,7 +35,8 @@ The corpus contains lectures and exams.
 
 Selection goals:
 - Prioritize relevant lecture materials that explain the topic clearly.
-- Include a handful of relevant exam files that assess the same topic (prefer about 3-6 exams when available).
+- Include a handful of relevant exam files that assess the same topic
+    (prefer about 3-6 exams when available).
 - Favor diversity across exam sources/years if available, and avoid near-duplicate files.
 
 Output rules:
@@ -59,7 +60,9 @@ def _extract_markdown_frontmatter(text: str) -> dict[str, Any] | None:
 
 
 class _Selection(BaseModel):
-    files: list[str] = Field(description="File paths relative to base_dir that are relevant to the topic.")
+    files: list[str] = Field(
+        description="File paths relative to base_dir that are relevant to the topic."
+    )
 
 
 class DocumentSelectorAgent:
@@ -92,7 +95,12 @@ class DocumentSelectorAgent:
                 messages.append(ToolMessage(content=str(result), tool_call_id=call["id"]))
 
         structured = self._llm.with_structured_output(_Selection)
-        final: Any = structured.invoke([*messages, HumanMessage(content=f"Now output the selected files for topic: {topic!r}.")])
+        final: Any = structured.invoke(
+            [
+                *messages,
+                HumanMessage(content=f"Now output the selected files for topic: {topic!r}."),
+            ]
+        )
 
         return self._validate(final.files if final else []), usage
 
@@ -115,14 +123,20 @@ class DocumentSelectorAgent:
 
         @tool
         def list_files(subdirectory: str = "") -> str:
-            """List files and folders inside subdirectory (relative to base_dir). Default: base_dir."""
+            """List files/folders inside subdirectory relative to base_dir.
+
+            Default: base_dir.
+            """
             target = (base / subdirectory).resolve() if subdirectory else base
             if not target.is_relative_to(base):
                 return "Access denied."
             if not target.exists():
                 return "Path does not exist."
             entries = sorted(target.iterdir(), key=lambda p: (p.is_file(), p.name))
-            lines = [f"{e.relative_to(base)}{'/' if e.is_dir() else f'  ({e.stat().st_size:,} bytes)'}" for e in entries]
+            lines = [
+                f"{e.relative_to(base)}{'/' if e.is_dir() else f'  ({e.stat().st_size:,} bytes)'}"
+                for e in entries
+            ]
             return "\n".join(lines) or "Empty directory."
 
         @tool
@@ -169,7 +183,8 @@ class DocumentSelectorAgent:
                         content=(
                             "Summarize this document concisely. Return ONLY the summary text. "
                             "Do not include introductory phrases like 'Here is a summary'. "
-                            "Do not use double quotes, formatting, or line breaks in your response.\n\n"
+                            "Do not use double quotes, formatting, or line breaks "
+                            "in your response.\n\n"
                             f"Document:\n{document_text[:_SUMMARY_INPUT_MAX_CHARS]}"
                         )
                     ),
@@ -204,4 +219,8 @@ if __name__ == "__main__":
     for path in selected:
         print(path)
     cost_str = f"${cost.cost_usd:.6f}" if cost.cost_usd is not None else "n/a"
-    print(f"\nTokens: {cost.total_tokens} (prompt={cost.prompt_tokens}, completion={cost.completion_tokens})  cost={cost_str}")
+    print(
+        f"\nTokens: {cost.total_tokens} "
+        f"(prompt={cost.prompt_tokens}, completion={cost.completion_tokens}) "
+        f" cost={cost_str}"
+    )

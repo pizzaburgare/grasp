@@ -18,7 +18,9 @@ def strip_outer_markdown_fence(text: str) -> str:
     """Removes a single outer ```md/```markdown fence wrapper if present."""
     stripped = text.strip()
     lines = stripped.splitlines()
-    fence_match = len(lines) >= MIN_FENCE_LINES and re.fullmatch(r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE)
+    fence_match = len(lines) >= MIN_FENCE_LINES and re.fullmatch(
+        r"```(?:md|markdown)?\\s*", lines[0], re.IGNORECASE
+    )
     if fence_match and lines[-1].strip() == "```":
         return "\n".join(lines[1:-1]).strip()
 
