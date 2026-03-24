@@ -60,14 +60,29 @@ def _frame_ssim(a: np.ndarray, b: np.ndarray) -> float:
 class VideoReview(BaseModel):
     """Structured result from the video review agent."""
 
-    text_clipped: bool = Field(description="Text or equations are clipped / cut off at the frame edges.")
-    overlapping_content: bool = Field(description="Content overlaps or is rendered unreadably on top of other content.")
-    broken_animations: bool = Field(description="Visual artifacts, glitches, or misplaced objects are visible.")
-    content_overflow: bool = Field(description="Content extends outside the visible frame boundary.")
-    latex_rendering: bool = Field(description="LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations).")
+    text_clipped: bool = Field(
+        description="Text or equations are clipped / cut off at the frame edges."
+    )
+    overlapping_content: bool = Field(
+        description="Content overlaps or is rendered unreadably on top of other content."
+    )
+    broken_animations: bool = Field(
+        description="Visual artifacts, glitches, or misplaced objects are visible."
+    )
+    content_overflow: bool = Field(
+        description="Content extends outside the visible frame boundary."
+    )
+    latex_rendering: bool = Field(
+        description=(
+            "LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations)."
+        )
+    )
     notes: str | None = Field(
         default=None,
-        description="Optional 4-8 word description of the problem(s) found. Only set when at least one criterion is true.",
+        description=(
+            "Optional 4-8 word description of the problem(s) found. "
+            "Only set when at least one criterion is true."
+        ),
     )
 
     @property
@@ -96,7 +111,9 @@ class VideoReview(BaseModel):
 class CodeEdit(BaseModel):
     """A single search/replace edit to apply to the script."""
 
-    old_code: str = Field(description="Verbatim substring to find in the source (include 5+ lines of context).")
+    old_code: str = Field(
+        description="Verbatim substring to find in the source (include 5+ lines of context)."
+    )
     new_code: str = Field(description="Replacement text.")
 
 
@@ -119,7 +136,9 @@ class ManimScriptGenerator:
         self.review_model = review_model
         self.fix_model = fix_model
 
-        self.llm = make_openrouter_llm(generation_model, title="Manim Script Generator", temperature=0.7)
+        self.llm = make_openrouter_llm(
+            generation_model, title="Manim Script Generator", temperature=0.7
+        )
         self.review_llm = make_openrouter_llm(review_model, title="Manim Video Reviewer")
         self.fix_llm = make_openrouter_llm(fix_model, title="Manim Video Fixer")
 
@@ -262,7 +281,9 @@ Generate a complete Manim script that:
                 next_t = min(t + _SCENE_SCAN_INTERVAL, duration)
                 next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
 
-                mae = float(np.mean(np.abs(curr_frame.astype(np.int16) - next_frame.astype(np.int16))))
+                mae = float(
+                    np.mean(np.abs(curr_frame.astype(np.int16) - next_frame.astype(np.int16)))
+                )
                 not_blank = float(np.std(curr_frame)) >= _MIN_CLIP_DURATION
                 if mae <= _SCENE_SETTLE_THRESHOLD and t - last_kept_t >= 1.0 and not_blank:
                     candidates.append((t, curr_frame.copy()))
@@ -309,7 +330,11 @@ Generate a complete Manim script that:
         # ----------------------------------------------------------
         if len(deduped) > _REVIEW_TARGET_FRAMES:
             step = len(deduped) / _REVIEW_TARGET_FRAMES
-            indices = list(dict.fromkeys(min(round(i * step), len(deduped) - 1) for i in range(_REVIEW_TARGET_FRAMES)))
+            indices = list(
+                dict.fromkeys(
+                    min(round(i * step), len(deduped) - 1) for i in range(_REVIEW_TARGET_FRAMES)
+                )
+            )
             deduped = [deduped[i] for i in indices]
 
         # ----------------------------------------------------------
@@ -400,7 +425,10 @@ Generate a complete Manim script that:
                 all_failed[c] = None
         all_failed_list = list(all_failed)
 
-        print(f"  Video review: {len(flagged)}/{len(frames)} frames flagged, {len(all_failed_list)} unique criteria failed:")
+        print(
+            f"  Video review: {len(flagged)}/{len(frames)} frames flagged, "
+            f"{len(all_failed_list)} unique criteria failed:"
+        )
         for criterion in all_failed_list:
             print(f"    \u2022 {criterion}")
 

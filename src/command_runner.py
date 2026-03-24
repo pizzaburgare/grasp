@@ -14,7 +14,11 @@ class SpinnerReporter:
 
     def render_tick(self, spinner_index: int, elapsed: float) -> None:
         print(
-            f"\r{self.status_label} {self._SPINNER[spinner_index % len(self._SPINNER)]} {elapsed:5.1f}s",
+            (
+                f"\r{self.status_label} "
+                f"{self._SPINNER[spinner_index % len(self._SPINNER)]} "
+                f"{elapsed:5.1f}s"
+            ),
             end="",
             flush=True,
         )
@@ -110,12 +114,20 @@ class CommandResultFormatter:
         return_code = process.returncode if process.returncode is not None else 1
 
         if timed_out:
-            timeout_note = f"{status_label} timed out after {watchdog_timeout_seconds:.1f}s. Subprocess was killed by watchdog."
+            timeout_note = (
+                f"{status_label} timed out after {watchdog_timeout_seconds:.1f}s. "
+                "Subprocess was killed by watchdog."
+            )
             stderr_text = f"{stderr_text}\n{timeout_note}".strip()
-            return_code = return_code if return_code != 0 else CommandResultFormatter._WATCHDOG_RETURN_CODE
+            return_code = (
+                return_code if return_code != 0 else CommandResultFormatter._WATCHDOG_RETURN_CODE
+            )
 
         if drain_thread_stuck:
-            join_note = f"{status_label} output drain thread did not stop within {drain_join_timeout_seconds:.1f}s join timeout."
+            join_note = (
+                f"{status_label} output drain thread did not stop within "
+                f"{drain_join_timeout_seconds:.1f}s join timeout."
+            )
             stderr_text = f"{stderr_text}\n{join_note}".strip()
 
         return subprocess.CompletedProcess(

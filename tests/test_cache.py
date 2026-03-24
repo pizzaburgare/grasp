@@ -231,7 +231,9 @@ class TestScriptCache:
         result = get_cached_script("my-lesson", "abc123")
         assert result == p
 
-    def test_save_creates_file_with_correct_content(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_save_creates_file_with_correct_content(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_script_to_cache
 
@@ -242,7 +244,9 @@ class TestScriptCache:
         assert saved.exists()
         assert saved.read_text() == "# my script"
 
-    def test_save_filename_is_hash_with_py_suffix(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_save_filename_is_hash_with_py_suffix(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_script_to_cache
 
@@ -264,7 +268,9 @@ class TestScriptCache:
         assert retrieved is not None
         assert retrieved.read_text() == "# roundtrip test"
 
-    def test_different_hashes_stored_independently(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_different_hashes_stored_independently(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_script, save_script_to_cache
 
@@ -308,7 +314,9 @@ class TestAudioCacheHelpers:
 
         assert get_cached_audio("lesson", "Hello world") is None
 
-    def test_save_uses_text_hash_as_filename(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_save_uses_text_hash_as_filename(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import hash_text, save_audio_to_cache
 
@@ -343,7 +351,9 @@ class TestAudioCacheHelpers:
         assert result is not None
         assert result.read_bytes() == b"fake-wav-bytes"
 
-    def test_different_texts_stored_independently(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_different_texts_stored_independently(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import get_cached_audio, save_audio_to_cache
 
@@ -391,7 +401,9 @@ class TestVideoCache:
         result = get_cached_video("lesson", "abc123")
         assert result == p
 
-    def test_save_filename_is_hash_with_mp4_suffix(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_save_filename_is_hash_with_mp4_suffix(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_video_to_cache
 
@@ -402,7 +414,9 @@ class TestVideoCache:
         assert saved.name == "deadbeef.mp4"
         assert saved.parent.name == "video"
 
-    def test_save_in_correct_lesson_subdirectory(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_save_in_correct_lesson_subdirectory(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_video_to_cache
 
@@ -445,7 +459,9 @@ class TestVideoCache:
 class TestCacheDirectoryLayout:
     """Verify that each asset type lands under the right sub-directory."""
 
-    def test_script_under_lesson_script_subdir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_script_under_lesson_script_subdir(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_script_to_cache
 
@@ -455,7 +471,9 @@ class TestCacheDirectoryLayout:
         # .cache/lu-decomposition/script/h1.py
         assert saved.parts[-4:-1] == (tmp_path.name, "lu-decomposition", "script")
 
-    def test_audio_under_lesson_audio_subdir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_audio_under_lesson_audio_subdir(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_audio_to_cache
 
@@ -465,7 +483,9 @@ class TestCacheDirectoryLayout:
         assert saved.parts[-2] == "audio"
         assert saved.parts[-3] == "lu-decomposition"
 
-    def test_video_under_lesson_video_subdir(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_video_under_lesson_video_subdir(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         monkeypatch.setattr("src.cache.CACHE_DIR", tmp_path)
         from src.cache import save_video_to_cache
 
@@ -529,7 +549,9 @@ class TestCreateWavAudioCache:
         assert out_wav.exists()
         assert out_wav.read_bytes() == cached.read_bytes()
 
-    def test_cache_miss_calls_engine_and_saves_to_cache(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_cache_miss_calls_engine_and_saves_to_cache(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """On a cache miss the engine is called and the WAV is stored in the cache."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -550,7 +572,9 @@ class TestCreateWavAudioCache:
         cached_path = cache_dir / f"{text_hash}.wav"
         assert cached_path.exists()
 
-    def test_cache_miss_cached_file_matches_output(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_cache_miss_cached_file_matches_output(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """The file saved to cache must be byte-identical to the numbered output."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -614,7 +638,9 @@ class TestCreateWavAudioCache:
         hash_files = [f for f in audio_out.iterdir() if f.name != "audio_1.wav"]
         assert hash_files == []
 
-    def test_second_call_same_text_hits_cache(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_second_call_same_text_hits_cache(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """The second call for the same text must read from cache, not call TTS again."""
         audio_out = tmp_path / "audio_out"
         audio_out.mkdir()
@@ -709,7 +735,9 @@ class TestWorkflowCacheIntegration:
 
         out_dir = tmp_path / "output"
 
-        _cached_script = "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
+        _cached_script = (
+            "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
+        )
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan") as mock_plan,
             patch(
@@ -740,7 +768,9 @@ class TestWorkflowCacheIntegration:
         wf.script_generator.generate_and_save.assert_not_called()  # script is skipped
         mock_render.assert_called_once()  # render still runs
 
-    def test_fresh_run_render_called_with_lesson_name_and_hash(self, tmp_path: Path, patched_cache_dir: Path) -> None:
+    def test_fresh_run_render_called_with_lesson_name_and_hash(
+        self, tmp_path: Path, patched_cache_dir: Path
+    ) -> None:
         """On a cache miss render_and_merge receives lesson_name and context_hash."""
         from src.workflow import CourseWorkflow
 
@@ -750,7 +780,9 @@ class TestWorkflowCacheIntegration:
         fake_video = out_dir / f"{slug}.mp4"
 
         with (
-            patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# plan", LLMUsage())),
+            patch.object(
+                CourseWorkflow, "generate_lesson_plan", return_value=("# plan", LLMUsage())
+            ),
             patch("src.workflow.render_and_merge", return_value=fake_video) as mock_render,
             patch("src.workflow.save_video_to_cache"),
         ):
@@ -760,7 +792,9 @@ class TestWorkflowCacheIntegration:
                 path = kwargs.get("output_path")
                 if path:
                     Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
-                    Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                    Path(str(path)).write_text(
+                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
+                    )
                 return LLMUsage()
 
             wf.script_generator = MagicMock()
@@ -777,7 +811,9 @@ class TestWorkflowCacheIntegration:
         # Iterative renders use context_hash=None; caching happens via save_video_to_cache
         assert kwargs.get("context_hash") is None
 
-    def test_lesson_plan_stored_alongside_script_as_md(self, tmp_path: Path, patched_cache_dir: Path) -> None:
+    def test_lesson_plan_stored_alongside_script_as_md(
+        self, tmp_path: Path, patched_cache_dir: Path
+    ) -> None:
         """Lesson plan is written as {hash}.md next to {hash}.py in script/."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
@@ -787,7 +823,9 @@ class TestWorkflowCacheIntegration:
         out_dir = tmp_path / "output"
 
         with (
-            patch.object(CourseWorkflow, "generate_lesson_plan", return_value=("# my plan", LLMUsage())),
+            patch.object(
+                CourseWorkflow, "generate_lesson_plan", return_value=("# my plan", LLMUsage())
+            ),
             patch(
                 "src.workflow.render_and_merge",
                 return_value=out_dir / f"{slug}.mp4",
@@ -805,7 +843,9 @@ class TestWorkflowCacheIntegration:
                 path = kwargs.get("output_path")
                 if path:
                     Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
-                    Path(str(path)).write_text("from manim import *\nclass S(Scene):\n    def construct(self): pass\n")
+                    Path(str(path)).write_text(
+                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
+                    )
                 return LLMUsage()
 
             wf.script_generator = MagicMock()
@@ -823,7 +863,9 @@ class TestWorkflowCacheIntegration:
         # Must NOT write a stray lesson_plan.md at the per-lesson root
         assert not (patched_cache_dir / slug / "lesson_plan.md").exists()
 
-    def test_context_hash_changes_with_input_dir(self, tmp_path: Path, patched_cache_dir: Path) -> None:
+    def test_context_hash_changes_with_input_dir(
+        self, tmp_path: Path, patched_cache_dir: Path
+    ) -> None:
         """Two runs with different input files produce different context hashes."""
         from src.cache import hash_context
 
@@ -866,7 +908,9 @@ class TestRenderAndMergeVideoSelection:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
 
-    def test_selects_most_recently_modified_mp4(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_selects_most_recently_modified_mp4(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         """With multiple stale MP4s in the cache, the newest one must be used."""
         import time
 
@@ -890,7 +934,9 @@ class TestRenderAndMergeVideoSelection:
 
         # Fake script with a Scene subclass
         script = tmp_path / "scene.py"
-        script.write_text("from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n")
+        script.write_text(
+            "from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n"
+        )
 
         # Patch CommandRunner.run to be a no-op (render already "done")
         with (
@@ -912,6 +958,7 @@ class TestRenderAndMergeVideoSelection:
 
             with patch("shutil.copy2", side_effect=fake_copy):
                 from src.rendering import render_and_merge
+
                 render_and_merge(script, out_dir, "new-scene")
 
         assert copied["src"] == new_mp4, f"Expected newest MP4 {new_mp4}, but got {copied['src']}"
@@ -929,7 +976,9 @@ class TestRenderAndMergeVideoSelection:
         self._write_mp4(only_mp4)
 
         script = tmp_path / "scene.py"
-        script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
+        script.write_text(
+            "from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n"
+        )
 
         with patch(
             "src.rendering.CommandRunner.run",
@@ -942,6 +991,7 @@ class TestRenderAndMergeVideoSelection:
 
             with patch("shutil.copy2", side_effect=fake_copy):
                 from src.rendering import render_and_merge
+
                 render_and_merge(script, out_dir, "my-scene")
 
         assert copied["src"] == only_mp4
@@ -960,7 +1010,9 @@ class TestRenderAndMergeVideoSelection:
         self._write_mp4(partial)
 
         script = tmp_path / "scene.py"
-        script.write_text("from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n")
+        script.write_text(
+            "from manim import *\nclass MyScene(Scene):\n    def construct(self): pass\n"
+        )
 
         with (
             patch(
@@ -970,4 +1022,5 @@ class TestRenderAndMergeVideoSelection:
             pytest.raises(FileNotFoundError),
         ):
             from src.rendering import render_and_merge
+
             render_and_merge(script, out_dir, "my-scene")

@@ -66,7 +66,7 @@ class ArgMinExample(Scene):
         # Section 1: Introduction
         # ==========================================================
         title = Title("Understanding the Argmin")
-        
+
         func_text = MathTex("f(x) = 2(x - 5)^2").scale(0.8)
         func_text.to_corner(UP + RIGHT)
         func_text.set_color(BLUE)
@@ -101,10 +101,10 @@ class ArgMinExample(Scene):
         # Section 3: The Minimum vs Argmin
         # ==========================================================
         t = ValueTracker(0)
-        
+
         initial_point = ax.c2p(t.get_value(), func(t.get_value()))
         dot = Dot(point=initial_point, color=YELLOW).scale(1.2)
-        
+
         dot.add_updater(lambda x: x.move_to(ax.c2p(t.get_value(), func(t.get_value()))))
 
         audio_manager.say(
@@ -177,11 +177,11 @@ class SineCurveUnitCircle(Scene):
         # Define positions
         origin_point = np.array([-4, 0, 0])
         curve_start = np.array([-3, 0, 0])
-        
+
         # Create Axes
         x_axis = Line(np.array([-6, 0, 0]), np.array([6, 0, 0]))
         y_axis = Line(np.array([-4, -2, 0]), np.array([-4, 2, 0]))
-        
+
         # Add labels
         x_labels = VGroup()
         for i, text in enumerate([r"\pi", r"2 \pi", r"3 \pi", r"4 \pi"]):
@@ -198,9 +198,9 @@ class SineCurveUnitCircle(Scene):
         # Create Circle
         circle = Circle(radius=1, color=WHITE)
         circle.move_to(origin_point)
-        
+
         title = Title("Generating the Sine Wave").scale(0.8)
-        
+
         audio_manager.say(
             "The circle represents a cycle, a rotation that repeats forever. But how do we unroll this loop into a wave?"
         )
@@ -212,12 +212,12 @@ class SineCurveUnitCircle(Scene):
         # ==========================================================
         dot = Dot(radius=0.1, color=YELLOW)
         dot.move_to(circle.point_from_proportion(0))
-        
+
         # Lines
         radius_line = always_redraw(
             lambda: Line(origin_point, dot.get_center(), color=BLUE, stroke_width=2)
         )
-        
+
         # We need to track time for the curve generation
         t_tracker = ValueTracker(0)
 
@@ -226,7 +226,7 @@ class SineCurveUnitCircle(Scene):
             lambda: Line(
                 dot.get_center(),
                 np.array([curve_start[0] + t_tracker.get_value() * 4, dot.get_center()[1], 0]),
-                color=YELLOW_A, 
+                color=YELLOW_A,
                 stroke_width=2,
                 include_tip=True
             )
@@ -251,7 +251,7 @@ class SineCurveUnitCircle(Scene):
         # ==========================================================
         # Section 3: The Animation
         # ==========================================================
-        
+
         # Define the updater for the dot based on the tracker
         def update_dot(mob):
             # Map tracker value (0 to 1 represents 0 to 2pi roughly in this scaling)
@@ -263,18 +263,18 @@ class SineCurveUnitCircle(Scene):
         audio_manager.say(
             "As we rotate, we project that height horizontally. Up and down, round and round. The circle's rotation creates the wave's oscillation."
         )
-        
+
         # Animate for 2 full cycles (proportion 0 to 2)
         # 8 seconds to match a slow, deliberate speed
         self.play(t_tracker.animate.set_value(2.0), run_time=8, rate_func=linear)
-        
+
         audio_manager.done_say()
 
         # ==========================================================
         # Section 4: Conclusion
         # ==========================================================
         dot.remove_updater(update_dot)
-        
+
         final_text = Text("Periodic Motion", font_size=36, color=YELLOW)
         final_text.next_to(trace, UP)
 
@@ -309,7 +309,7 @@ class MovingFrameBox(Scene):
         # Section 1: Introduction to the Product Rule
         # ==========================================================
         title = Title("The Product Rule")
-        
+
         # Defining the equation clearly
         equation = MathTex(
             r"\frac{d}{dx}(f(x)g(x)) =",   # Index 0

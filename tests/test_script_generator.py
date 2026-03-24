@@ -122,7 +122,9 @@ class TestExtractVideoFrames:
         monkeypatch.setattr("src.script_generator.VideoFileClip", FakeClip)
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
-        assert len(parts) > 1, f"Only {len(parts)} frame(s) extracted from {len(frames)} distinct frames"
+        assert len(parts) > 1, (
+            f"Only {len(parts)} frame(s) extracted from {len(frames)} distinct frames"
+        )
         # Each entry is (label, image_part)
         for label, img_part in parts:
             assert isinstance(label, str)

@@ -35,7 +35,10 @@ def detect_scene_class(script_path: Path) -> str:
             if cls.name in scene_like:
                 continue
             base_names = [_base_name(base) for base in cls.bases]
-            if any(name and (name == "Scene" or name.endswith("Scene") or name in scene_like) for name in base_names):
+            if any(
+                name and (name == "Scene" or name.endswith("Scene") or name in scene_like)
+                for name in base_names
+            ):
                 scene_like.append(cls.name)
                 changed = True
 
@@ -134,13 +137,17 @@ def render_and_merge(
             stack.callback(audio_clip.close)
             final_clip = video_clip.with_audio(audio_clip)
             stack.callback(final_clip.close)
-            final_clip.write_videofile(str(final_path), codec="libx264", audio_codec="aac", logger=None, threads=4)
+            final_clip.write_videofile(
+                str(final_path), codec="libx264", audio_codec="aac", logger=None, threads=4
+            )
 
     print(f"Final video: {final_path}")
 
     if lesson_name and context_hash:
         save_video_to_cache(lesson_name, context_hash, final_path)
-        print(f"Video cached: {get_lesson_cache_dir(lesson_name) / 'video' / f'{context_hash}.mp4'}")
+        print(
+            f"Video cached: {get_lesson_cache_dir(lesson_name) / 'video' / f'{context_hash}.mp4'}"
+        )
 
     # Clean up working audio files - hash-named cache files are preserved
     if audio_work_dir != audio_cache_dir:

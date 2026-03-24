@@ -90,7 +90,9 @@ def run_review(
             result = structured_llm.invoke([sys_msg, HumanMessage(content=user_content)])
             review: VideoReview = result["parsed"]  # type: ignore[index]
             reviews.append(review)
-            status = f"ISSUES ({', '.join(review.failed_criteria())})" if review.has_issues else "OK"
+            status = (
+                f"ISSUES ({', '.join(review.failed_criteria())})" if review.has_issues else "OK"
+            )
         except Exception as exc:  # noqa: BLE001
             reviews.append(None)
             status = f"ERROR ({exc})"
@@ -324,7 +326,9 @@ class FrameViewer:
             self.sim_text.set_color(color)
 
         # Header
-        self.hdr_text.set_text(f"Frame Inspector  •  {self.idx + 1} of {self.n}  •  ← / → to navigate")
+        self.hdr_text.set_text(
+            f"Frame Inspector  •  {self.idx + 1} of {self.n}  •  ← / → to navigate"
+        )
 
         # Review panel
         if self.review_text_obj is not None and self.reviews is not None:
@@ -351,7 +355,9 @@ class FrameViewer:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Inspect video frames (and optionally run the review LLM).")
+    parser = argparse.ArgumentParser(
+        description="Inspect video frames (and optionally run the review LLM)."
+    )
     parser.add_argument("video", type=Path, help="Path to the .mp4 video file.")
     parser.add_argument(
         "--review",

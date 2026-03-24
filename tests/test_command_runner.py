@@ -80,7 +80,9 @@ class TestCommandRunnerSafety:
         process = _ImmediateProcess()
         created_threads: list[_ThreadSpy] = []
 
-        def _thread_factory(*, target: object, args: tuple[object, ...], daemon: bool) -> _ThreadSpy:
+        def _thread_factory(
+            *, target: object, args: tuple[object, ...], daemon: bool
+        ) -> _ThreadSpy:
             thread = _ThreadSpy(target=target, args=args, daemon=daemon)
             created_threads.append(thread)
             return thread

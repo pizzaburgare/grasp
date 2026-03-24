@@ -22,8 +22,6 @@ VIDEO_REVIEW_PROMPT = PROMPTS_DIR / "video_review_prompt.md"
 VIDEO_FIX_PROMPT = PROMPTS_DIR / "video_fix_prompt.md"
 IMAGE_TRANSCRIBER_PROMPT = PROMPTS_DIR / "image_transcriber_prompt.md"
 PDF_TRANSCRIBER_PROMPT = PROMPTS_DIR / "pdf_transcriber_prompt.md"
-EXAM_CLASSIFIER_PROMPT = PROMPTS_DIR / "exam_classifier_prompt.md"
-EXAM_PROMPT = PROMPTS_DIR / "exam_prompt.md"
 
 # --- Default input ---
 INPUT_DIR = ROOT / "input"

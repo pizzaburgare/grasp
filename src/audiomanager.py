@@ -116,7 +116,10 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
         try:
             audio, sr = _future.result(timeout=TTS_SYNTHESIS_TIMEOUT_SECONDS)
         except FuturesTimeoutError as err:
-            raise RuntimeError(f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s ({word_count} words)") from err
+            raise RuntimeError(
+                "TTS synthesis timed out after "
+                f"{TTS_SYNTHESIS_TIMEOUT_SECONDS}s ({word_count} words)"
+            ) from err
 
     actual_duration = len(audio) / sr
     max_duration = word_count * TTS_MAX_SECONDS_PER_WORD
@@ -164,7 +167,9 @@ class AudioManager:
 
         _audio_log("AudioManager: Done saying text")
         time_since_started = self.scene.renderer.time - self.times[-1]
-        _audio_log(f"AudioManager: Time since started saying text: {time_since_started:.2f} seconds")
+        _audio_log(
+            f"AudioManager: Time since started saying text: {time_since_started:.2f} seconds"
+        )
         to_sleep = self.audio_durations[-1] - time_since_started
         if to_sleep > 0:
             _audio_log(f"AudioManager: Sleeping for {to_sleep:.2f} seconds")

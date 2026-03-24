@@ -32,6 +32,17 @@ repos:
     hooks:
     -   id: pyright
 
+-   repo: https://github.com/pylint-dev/pylint
+    rev: v4.0.5
+    hooks:
+    -   id: pylint
+        name: Check max file length
+        files: ^src/
+        args:
+            - --disable=all
+            - --enable=too-many-lines
+            - --max-module-lines=600
+
 -   repo: local
     hooks:
     -   id: deptry
@@ -48,10 +59,3 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
-
-    -   id: check-file-length
-        name: check file length (max 600 lines)
-        entry: uv run scripts/check_file_length.py
-        language: system
-        types: [python]
-        exclude: ^tests/

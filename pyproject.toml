@@ -22,7 +22,6 @@ dependencies = [
     "piper-tts>=1.4.1",
     "qwen-tts>=0.1.0",
     "torch>=2.3.0",
-    "pypdfium2>=4.30.0",
     "python-dotenv>=1.2.2",
     "markitdown[pdf]>=0.1.5",
     "pyyaml>=6.0.2",
@@ -30,6 +29,7 @@ dependencies = [
     "diff-match-patch>=20241021",
     "pymupdf>=1.27.2",
     "gitpython>=3.1.46",
+    "pylint>=4.0.5",
 ]
 
 [project.scripts]
@@ -46,8 +46,14 @@ dev = [
     "pyright>=1.1.0",
     "ruff>=0.15.4",
     "types-pyyaml>=6.0.12.20250915",
+    "pylint>=4.0.5"
 ]
 
+# Deptry
+[tool.deptry.per_rule_ignores]
+DEP002 = ["pylint"]
+
+# Pyright
 [tool.pyright]
 pythonVersion = "3.13"
 typeCheckingMode = "basic"
@@ -64,6 +70,9 @@ exclude = [
     "tests",
 ]
 
+
+
+# Pytest
 [tool.pytest.ini_options]
 addopts = "-v"
 testpaths = ["tests"]
@@ -71,6 +80,11 @@ markers = [
     "integration: end-to-end tests that download and run the TTS model locally",
 ]
 
+# Pylint
+[tool.pylint.design]
+max-module-lines = 600
+
+# Ruff
 [tool.ruff.lint.per-file-ignores]
 # Manim scenes use `from manim import *` by convention
 ".cache/scripts/lesson.py" = ["F403", "F405"]
@@ -79,7 +93,7 @@ markers = [
 
 [tool.ruff]
 # Set the maximum line length to 130
-line-length = 130
+line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]

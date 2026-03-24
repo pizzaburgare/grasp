@@ -29,11 +29,15 @@ class TestRenderAndMergeMoviepySafety:
         merged_audio.write_bytes(b"fake-wav")
 
         script = tmp_path / "scene.py"
-        script.write_text("from manim import *\nclass SceneA(Scene):\n    def construct(self): pass\n")
+        script.write_text(
+            "from manim import *\nclass SceneA(Scene):\n    def construct(self): pass\n"
+        )
 
         return script, output_dir
 
-    def test_write_videofile_does_not_pass_verbose_fps(self, tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    def test_write_videofile_does_not_pass_verbose_fps(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
         from src.rendering import render_and_merge
 
         script, output_dir = self._setup_render_fixture(tmp_path, monkeypatch)

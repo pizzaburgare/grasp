@@ -16,9 +16,7 @@ MAX_SCRIPT_ITERATIONS = 8
 #   seconds per word (catches runaway/corrupt model output, e.g. 10-min noise).
 # TTS_SYNTHESIS_TIMEOUT_SECONDS: hard wall-clock limit per synthesis call.
 TTS_MAX_SECONDS_PER_WORD: float = float(os.getenv("TTS_MAX_SECONDS_PER_WORD", "1.0"))
-TTS_SYNTHESIS_TIMEOUT_SECONDS: int = int(
-    os.getenv("TTS_SYNTHESIS_TIMEOUT_SECONDS", "300")
-)
+TTS_SYNTHESIS_TIMEOUT_SECONDS: int = int(os.getenv("TTS_SYNTHESIS_TIMEOUT_SECONDS", "300"))
 
 # Per-stage model configuration.
 # Each can be overridden independently via the corresponding .env variable;
