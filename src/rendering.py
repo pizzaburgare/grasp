@@ -9,7 +9,7 @@ from pathlib import Path
 from moviepy import AudioFileClip, VideoFileClip
 
 from src.cache import get_audio_cache_dir, get_lesson_cache_dir, save_video_to_cache
-from src.command_runner import CommandRunner
+from src.command_runner import run_command
 from src.paths import CACHE_AUDIO_DIR, CACHE_MANIM_DIR
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def render_and_merge(
     audio_work_dir.mkdir(parents=True, exist_ok=True)
     cache_manim.mkdir(parents=True, exist_ok=True)
 
-    result = CommandRunner.run(
+    result = run_command(
         command=[
             sys.executable,
             "-m",
