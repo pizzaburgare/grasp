@@ -64,6 +64,17 @@ def main() -> None:
         action="store_true",
         help="Skip the LLM video-review loop and go straight to the final render",
     )
+    parser.add_argument(
+        "--script-hash",
+        type=str,
+        default=None,
+        metavar="HASH",
+        help=(
+            "Reuse a specific cached script hash. Useful for testing rendering "
+            "(e.g., TTS/quality changes) without regenerating the lesson plan "
+            "and script."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -74,4 +85,5 @@ def main() -> None:
         output_dir=args.output_dir,
         final_quality=args.final,
         skip_review=args.skip_review,
+        user_script_hash=args.script_hash,
     )

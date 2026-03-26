@@ -151,6 +151,24 @@ class AudioManager:
         self.engine = engine or get_default_engine()
         self.times: list[float] = []
         self.audio_durations: list[float] = []
+        self.chapters: list[tuple[str, str]] = []
+
+    @staticmethod
+    def _format_timestamp(seconds: float) -> str:
+        """Format *seconds* as ``H:MM:SS`` or ``MM:SS`` (no milliseconds)."""
+        total = int(seconds)
+        h, remainder = divmod(total, 3600)
+        m, s = divmod(remainder, 60)
+        if h:
+            return f"{h}:{m:02d}:{s:02d}"
+        return f"{m:02d}:{s:02d}"
+
+    def new_section(self, section_name: str) -> None:
+        _audio_log(f": Starting new section - {section_name}")
+        time = self.scene.renderer.time
+        ts_string = self._format_timestamp(time)
+
+        self.chapters.append((section_name, ts_string))
 
     def say(self, text: str) -> None:
         _audio_log(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
@@ -217,3 +235,8 @@ class AudioManager:
             wav_file.writeframes(audio_data.tobytes())
 
         _audio_log(f"AudioManager: Merged {self.i} audio files to {merged_path}")
+        yt_timestamps = "\n".join(f"{name}: {ts}" for name, ts in self.chapters)
+
+        _audio_log(f"AudioManager: YouTube timestamps:\n{yt_timestamps}")
+        with open(f"output/yt_timestamps_{self.scene.__class__.__name__}.txt", "w") as f:
+            f.write(yt_timestamps)

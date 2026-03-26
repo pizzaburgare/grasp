@@ -255,6 +255,7 @@ class CourseWorkflow:
         output_dir: str = "output",
         final_quality: bool = False,
         skip_review: bool = False,
+        user_script_hash: str | None = None,
     ) -> dict[str, Any]:
         slug = lesson_name_to_key(topic)
         out = Path(output_dir)
@@ -263,7 +264,11 @@ class CourseWorkflow:
         if input_dir is None and INPUT_DIR.is_dir():
             input_dir = str(INPUT_DIR)
 
-        script_hash = hash_context(topic, input_dir, extra_context=self._build_script_context())
+        script_hash = user_script_hash or hash_context(
+            topic,
+            input_dir,
+            extra_context=self._build_script_context(),
+        )
         video_hash = hash_context(
             topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality)
         )
@@ -295,46 +300,6 @@ class CourseWorkflow:
                 "openrouter_usage": tracker.summarize(),
             }
 
-        # Process input materials
-        input_parts: list[dict[str, Any]] | None = None
-
-        if input_dir:
-            input_path = Path(input_dir)
-
-            # If input points at a course directory, preprocess raw assets first.
-            raw_dir = (input_path / "raw").resolve()
-            processed_dir = (input_path / "processed").resolve()
-
-            assert raw_dir.is_dir(), (
-                f"Expected 'raw' subdirectory under {input_dir} for course inputs"
-            )
-
-            print("Preprocessing raw input files ...")
-            total_cost = batch_process(raw_dir, processed_dir)
-            selector_agent = DocumentSelectorAgent(processed_dir)
-
-            selected, selection_cost = selector_agent.select(topic)
-            cost_str = (
-                f"${selection_cost.cost_usd:.6f}" if selection_cost.cost_usd is not None else "n/a"
-            )
-
-            print(f"Selected files cost={cost_str}")
-            for path in selected:
-                print(f"  - {path.resolve().relative_to(processed_dir).as_posix()}")
-            input_parts = []
-            for path in selected:
-                rel_path = path.resolve().relative_to(processed_dir).as_posix()
-                input_parts.append(
-                    {
-                        "type": "text",
-                        "text": f"--- File: {rel_path} ---\n{path.read_text(errors='replace')}",
-                    }
-                )
-
-            print(
-                f"{len(input_parts)} file(s), total LLM cost for preprocessing: ${total_cost:.4f}"
-            )
-
         # Steps 1+2: lesson plan + Manim script
         script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
         lesson_plan_path = script_path.with_suffix(".md")
@@ -345,6 +310,49 @@ class CourseWorkflow:
             tracker.record("Step 1 - Lesson planning", skipped=True)
             tracker.record("Step 2 - Script generation", skipped=True)
         else:
+            # Process input materials
+            input_parts: list[dict[str, Any]] | None = None
+
+            if input_dir:
+                input_path = Path(input_dir)
+
+                # If input points at a course directory, preprocess raw assets first.
+                raw_dir = (input_path / "raw").resolve()
+                processed_dir = (input_path / "processed").resolve()
+
+                assert raw_dir.is_dir(), (
+                    f"Expected 'raw' subdirectory under {input_dir} for course inputs"
+                )
+
+                print("Preprocessing raw input files ...")
+                total_cost = batch_process(raw_dir, processed_dir)
+                selector_agent = DocumentSelectorAgent(processed_dir)
+
+                selected, selection_cost = selector_agent.select(topic)
+                cost_str = (
+                    f"${selection_cost.cost_usd:.6f}"
+                    if selection_cost.cost_usd is not None
+                    else "n/a"
+                )
+
+                print(f"Selected files cost={cost_str}")
+                for path in selected:
+                    print(f"  - {path.resolve().relative_to(processed_dir).as_posix()}")
+                input_parts = []
+                for path in selected:
+                    rel_path = path.resolve().relative_to(processed_dir).as_posix()
+                    input_parts.append(
+                        {
+                            "type": "text",
+                            "text": f"--- File: {rel_path} ---\n{path.read_text(errors='replace')}",
+                        }
+                    )
+
+                print(
+                    f"{len(input_parts)} file(s),"
+                    f"total LLM cost for preprocessing: ${total_cost:.4f}"
+                )
+
             lesson, lesson_usage = self.generate_lesson_plan(topic, input_parts=input_parts)
             tracker.record("Step 1 - Lesson planning", lesson_usage)
             lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
