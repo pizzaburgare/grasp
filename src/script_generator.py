@@ -143,13 +143,13 @@ class ManimScriptGenerator:
         self.review_llm = make_openrouter_llm(review_model, title="Manim Video Reviewer")
         self.fix_llm = make_openrouter_llm(fix_model, title="Manim Video Fixer")
 
-        with open(MANIM_PROMPT) as f:
+        with open(MANIM_PROMPT, encoding="utf-8") as f:
             self.system_prompt = f.read()
 
-        with open(VIDEO_REVIEW_PROMPT) as f:
+        with open(VIDEO_REVIEW_PROMPT, encoding="utf-8") as f:
             self.review_prompt_template = f.read()
 
-        with open(VIDEO_FIX_PROMPT) as f:
+        with open(VIDEO_FIX_PROMPT, encoding="utf-8") as f:
             self.fix_prompt = f.read()
 
     def generate_script(
