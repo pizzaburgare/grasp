@@ -20,6 +20,7 @@ from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
 from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
 from src.search_replace import flexible_search_and_replace
 from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
+from src.utils import format_timestamp
 
 load_dotenv()
 
@@ -240,16 +241,6 @@ Generate a complete Manim script that:
         return _frame_ssim(a, b)
 
     @staticmethod
-    def _format_timestamp(seconds: float) -> str:
-        """Format *seconds* as ``H:MM:SS`` or ``M:SS`` (no milliseconds)."""
-        total = int(seconds)
-        h, remainder = divmod(total, 3600)
-        m, s = divmod(remainder, 60)
-        if h:
-            return f"{h}:{m:02d}:{s:02d}"
-        return f"{m}:{s:02d}"
-
-    @staticmethod
     def _scan_settled_frames(
         video_path: Path,
     ) -> list[tuple[float, np.ndarray]]:
@@ -346,7 +337,7 @@ Generate a complete Manim script that:
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
             data = base64.b64encode(buf.getvalue()).decode()
-            label = f"Frame at {ManimScriptGenerator._format_timestamp(chosen_t)}"
+            label = f"Frame at {format_timestamp(chosen_t)}"
             parts.append(
                 (
                     label,

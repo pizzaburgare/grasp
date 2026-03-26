@@ -16,6 +16,7 @@ from src.settings import (
     TTS_MAX_SECONDS_PER_WORD,
     TTS_SYNTHESIS_TIMEOUT_SECONDS,
 )
+from src.utils import format_timestamp
 
 from .tts import TTSEngine, get_default_engine
 
@@ -153,20 +154,10 @@ class AudioManager:
         self.audio_durations: list[float] = []
         self.chapters: list[tuple[str, str]] = []
 
-    @staticmethod
-    def _format_timestamp(seconds: float) -> str:
-        """Format *seconds* as ``H:MM:SS`` or ``MM:SS`` (no milliseconds)."""
-        total = int(seconds)
-        h, remainder = divmod(total, 3600)
-        m, s = divmod(remainder, 60)
-        if h:
-            return f"{h}:{m:02d}:{s:02d}"
-        return f"{m:02d}:{s:02d}"
-
     def new_section(self, section_name: str) -> None:
         _audio_log(f": Starting new section - {section_name}")
         time = self.scene.renderer.time
-        ts_string = self._format_timestamp(time)
+        ts_string = format_timestamp(time)
 
         self.chapters.append((section_name, ts_string))
 
