@@ -4,7 +4,7 @@ import io
 from langchain_core.messages import HumanMessage, SystemMessage
 from PIL import Image
 
-from src.llm_metrics import extract_llm_usage, make_openrouter_llm
+from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
 from src.paths import IMAGE_TRANSCRIBER_PROMPT
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}
@@ -36,7 +36,7 @@ def image_to_md_llm(
     input_path: str,
     output_path: str | None = None,
     model: str = "google/gemini-2.0-flash-001",
-) -> float:
+) -> LLMUsage | None:
     """
     Sends an image to an LLM and returns a Markdown transcription.
     Optionally writes the result to output_path.
@@ -65,17 +65,17 @@ def image_to_md_llm(
     response = llm.invoke(messages)
     markdown = str(response.content)
 
-    cost = extract_llm_usage(response).cost_usd or 0.0
+    usage = extract_llm_usage(response)
 
     if output_path:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown)
         print(f"LLM transcription saved to: {output_path}")
 
-    return cost
+    return usage
 
 
-def convert_image_to_md(input_file: str, output_file: str) -> float:
+def convert_image_to_md(input_file: str, output_file: str) -> LLMUsage | None:
     return image_to_md_llm(input_file, output_file)
 
 

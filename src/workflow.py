@@ -325,13 +325,15 @@ class CourseWorkflow:
                 )
 
                 print("Preprocessing raw input files ...")
-                total_cost = batch_process(raw_dir, processed_dir)
+                preprocessing_usage = batch_process(raw_dir, processed_dir)
                 selector_agent = DocumentSelectorAgent(processed_dir)
 
-                selected, selection_cost = selector_agent.select(topic)
+                selected, selection_usage = selector_agent.select(topic)
+                tracker.record("Step 0 - Selecting documents", selection_usage)
+
                 cost_str = (
-                    f"${selection_cost.cost_usd:.6f}"
-                    if selection_cost.cost_usd is not None
+                    f"${selection_usage.cost_usd:.6f}"
+                    if selection_usage.cost_usd is not None
                     else "n/a"
                 )
 
@@ -347,11 +349,19 @@ class CourseWorkflow:
                             "text": f"--- File: {rel_path} ---\n{path.read_text(errors='replace')}",
                         }
                     )
+                tracker.record("Step -1 - Preparing input for lesson plan", preprocessing_usage)
+                preprocessing_cost_str = (
+                    f"${preprocessing_usage.cost_usd:.4f}"
+                    if preprocessing_usage.cost_usd is not None
+                    else "n/a"
+                )
 
                 print(
                     f"{len(input_parts)} file(s),"
-                    f"total LLM cost for preprocessing: ${total_cost:.4f}"
+                    f"total LLM cost for preprocessing: {preprocessing_cost_str}"
                 )
+            else:
+                tracker.record("Step 0 - Selecting documents", skipped=True)
 
             lesson, lesson_usage = self.generate_lesson_plan(topic, input_parts=input_parts)
             tracker.record("Step 1 - Lesson planning", lesson_usage)
