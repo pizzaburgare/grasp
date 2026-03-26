@@ -328,10 +328,12 @@ class CourseWorkflow:
                 total_cost = batch_process(raw_dir, processed_dir)
                 selector_agent = DocumentSelectorAgent(processed_dir)
 
-                selected, selection_cost = selector_agent.select(topic)
+                selected, selection_usage = selector_agent.select(topic)
+                tracker.record("Step 0 - Selecting documents", selection_usage)
+
                 cost_str = (
-                    f"${selection_cost.cost_usd:.6f}"
-                    if selection_cost.cost_usd is not None
+                    f"${selection_usage.cost_usd:.6f}"
+                    if selection_usage.cost_usd is not None
                     else "n/a"
                 )
 
