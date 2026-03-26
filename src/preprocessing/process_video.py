@@ -72,8 +72,7 @@ def _describe_frame(
     except Exception as e:  # noqa: BLE001
         print(f"An error occurred while processing the frame: {e}")
         return (None, f"Error processing image at {timestamp:.2f}s")
-    else:
-        return (usage, f"Description of image at {timestamp:.2f}s: {response.content}")
+    return (usage, f"Description of image at {timestamp:.2f}s: {response.content}")
 
 
 def mp4_to_text(video_path: str, output_path: str) -> LLMUsage | None:

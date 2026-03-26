@@ -142,8 +142,7 @@ def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False) ->
     if local:
         local_pdf_conversion(input_file, output_file)
         return None
-    else:
-        return pdf_to_md_llm(input_file, output_file)
+    return pdf_to_md_llm(input_file, output_file)
 
 
 if __name__ == "__main__":

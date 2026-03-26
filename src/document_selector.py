@@ -115,31 +115,31 @@ class DocumentSelectorAgent:
         """Resolve relative paths, reject traversals and missing files."""
         result: list[Path] = []
         for rel in candidates:
-            path = (self.base_dir / rel).resolve()
+            abs_path = (self.base_dir / rel).resolve()
             try:
-                path.relative_to(self.base_dir)
+                abs_path.relative_to(self.base_dir)
             except ValueError:
                 logger.warning("Rejected out-of-bounds path: %s", rel)
                 continue
-            if path.is_file():
-                result.append(path)
+            if abs_path.is_file():
+                result.append(abs_path)
         return result
 
     def _build_tools(self) -> list:  # noqa: C901
         base = self.base_dir
 
         def _preview_one_file(file_path: str) -> str:
-            path = (base / file_path).resolve()
-            if not path.is_relative_to(base):
+            abs_path = (base / file_path).resolve()
+            if not abs_path.is_relative_to(base):
                 return f"[{file_path}]\nAccess denied."
-            if not path.is_file():
+            if not abs_path.is_file():
                 return f"[{file_path}]\nNot a file."
 
-            suffix = path.suffix.lower()
+            suffix = abs_path.suffix.lower()
             if suffix not in {".md", ".markdown", ".txt"}:
                 return f"[{file_path}]\nDiscarded: unsupported file type."
 
-            raw_text = path.read_text(errors="replace")
+            raw_text = abs_path.read_text(errors="replace")
 
             if suffix in {".md", ".markdown"}:
                 metadata = _extract_markdown_frontmatter(raw_text)

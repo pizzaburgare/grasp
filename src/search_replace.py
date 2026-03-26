@@ -173,18 +173,18 @@ def relative_indent(texts: list[str]) -> tuple[RelativeIndenter, list[str]]:
     return ri, texts
 
 
-line_padding = 100
+LINE_PADDING = 100
 
 
 def line_pad(text: str) -> str:
-    padding = "\n" * line_padding
+    padding = "\n" * LINE_PADDING
     return padding + text + padding
 
 
 def line_unpad(text: str) -> str | None:
-    if set(text[:line_padding] + text[-line_padding:]) != set("\n"):
+    if set(text[:LINE_PADDING] + text[-LINE_PADDING:]) != set("\n"):
         return None
-    return text[line_padding:-line_padding]
+    return text[LINE_PADDING:-LINE_PADDING]
 
 
 def dmp_apply(texts: list[str], remap: bool = True) -> str | None:
@@ -242,10 +242,11 @@ def dmp_apply(texts: list[str], remap: bool = True) -> str | None:
 
 
 def lines_to_chars(lines: str, mapping: list[str]) -> str:
-    new_text = []
+    """Convert a list of lines back into a single string, using the provided mapping"""
+    new_text_list = []
     for char in lines:
-        new_text.append(mapping[ord(char)])
-    new_text = "".join(new_text)
+        new_text_list.append(mapping[ord(char)])
+    new_text = "".join(new_text_list)
     return new_text
 
 
@@ -342,6 +343,8 @@ def diff_lines(search_text: str, replace_text: str) -> list:
 
 
 def search_and_replace(texts: list[str]) -> str | None:
+    """Perform a literal search and replace."""
+
     search_text, replace_text, original_text = texts
 
     num = original_text.count(search_text)
