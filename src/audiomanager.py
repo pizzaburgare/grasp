@@ -151,7 +151,7 @@ class AudioManager:
         self.engine = engine or get_default_engine()
         self.times: list[float] = []
         self.audio_durations: list[float] = []
-        self.chapters: list[tuple[str, str]] = [("Intro", "00:00")]
+        self.chapters: list[tuple[str, str]] = []
 
     @staticmethod
     def _format_timestamp(seconds: float) -> str:
