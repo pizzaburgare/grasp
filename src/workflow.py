@@ -255,6 +255,7 @@ class CourseWorkflow:
         output_dir: str = "output",
         final_quality: bool = False,
         skip_review: bool = False,
+        user_script_hash: str | None = None,
     ) -> dict[str, Any]:
         slug = lesson_name_to_key(topic)
         out = Path(output_dir)
@@ -263,7 +264,11 @@ class CourseWorkflow:
         if input_dir is None and INPUT_DIR.is_dir():
             input_dir = str(INPUT_DIR)
 
-        script_hash = hash_context(topic, input_dir, extra_context=self._build_script_context())
+        script_hash = user_script_hash or hash_context(
+            topic,
+            input_dir,
+            extra_context=self._build_script_context(),
+        )
         video_hash = hash_context(
             topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality)
         )

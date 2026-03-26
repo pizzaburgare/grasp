@@ -133,6 +133,9 @@ uv run lesson "QR Decomposition" --model anthropic/claude-sonnet-4-5
 
 # custom output directory
 uv run lesson "Eigenvalues" --output-dir ./renders
+
+# reuse a cached script to test rendering without regenerating script/lesson plan
+uv run lesson "Kendall's notation" --input-dir ./courses/kosys --script-hash 641aab71c6b2b647 --skip-review
 ```
 
 ### CLI Reference
@@ -144,6 +147,7 @@ uv run lesson "Eigenvalues" --output-dir ./renders
 | `--output-dir` | `./output` | Where to place the final video |
 | `--model` | per-stage env vars | Override all pipeline stages with a single model |
 | `--final` | off | Render at high quality (`-qh`) instead of low (`-ql`) |
+| `--script-hash` | auto | Reuse a specific cached script hash to test rendering without regenerating the lesson plan/script |
 
 ### Supported Input Formats
 

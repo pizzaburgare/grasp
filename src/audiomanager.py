@@ -238,5 +238,5 @@ class AudioManager:
         yt_timestamps = "\n".join(f"{name}: {ts}" for name, ts in self.chapters)
 
         _audio_log(f"AudioManager: YouTube timestamps:\n{yt_timestamps}")
-        with open("output/yt_timestamps.txt", "w") as f:
+        with open(f"output/yt_timestamps_{self.scene.__class__.__name__}.txt", "w") as f:
             f.write(yt_timestamps)
