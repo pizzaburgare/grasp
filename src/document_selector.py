@@ -23,8 +23,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _SUMMARY_MAX_CHARS = 2_000
-_SUMMARY_INPUT_MAX_CHARS = 8_000
-_MAX_ITERATIONS = 10
+_MAX_ITERATIONS = 5
+_MAX_PREVIEW_FILES = 20
 
 _SYSTEM_PROMPT = """\
 You are a document selection assistant for lesson creation.
@@ -32,6 +32,12 @@ Your task is to select source materials relevant to a specific lesson topic.
 
 Explore the provided directory with list_files and get_summary.
 The corpus contains lectures and exams.
+
+Tool usage guidance:
+- Use list_files to inspect folders.
+- Use get_summary with a list of file paths.
+- Batch requests when possible: pass multiple files in a single get_summary call
+    instead of calling get_summary once per file.
 
 Selection goals:
 - Prioritize relevant lecture materials that explain the topic clearly.
@@ -43,6 +49,7 @@ Output rules:
 - Select only files, not directories.
 - Prefer source documents over derived artefacts.
 - Exclude files that are not clearly relevant to the lesson topic.
+- Return multiple files when they are relevant; do not limit yourself to one.
 """
 
 
@@ -121,6 +128,35 @@ class DocumentSelectorAgent:
     def _build_tools(self) -> list:  # noqa: C901
         base = self.base_dir
 
+        def _preview_one_file(file_path: str) -> str:
+            path = (base / file_path).resolve()
+            if not path.is_relative_to(base):
+                return f"[{file_path}]\nAccess denied."
+            if not path.is_file():
+                return f"[{file_path}]\nNot a file."
+
+            suffix = path.suffix.lower()
+            if suffix not in {".md", ".markdown", ".txt"}:
+                return f"[{file_path}]\nDiscarded: unsupported file type."
+
+            raw_text = path.read_text(errors="replace")
+
+            if suffix in {".md", ".markdown"}:
+                metadata = _extract_markdown_frontmatter(raw_text)
+                if metadata:
+                    metadata_text = yaml.safe_dump(
+                        metadata,
+                        sort_keys=False,
+                        allow_unicode=True,
+                    ).strip()
+                    return f"[{file_path}]\n{metadata_text[:_SUMMARY_MAX_CHARS]}"
+
+            document_text = raw_text.strip()
+            if not document_text:
+                return f"[{file_path}]\nNo extractable text content."
+
+            return f"[{file_path}]\n{document_text[:_SUMMARY_MAX_CHARS]}"
+
         @tool
         def list_files(subdirectory: str = "") -> str:
             """List files/folders inside subdirectory relative to base_dir.
@@ -140,60 +176,24 @@ class DocumentSelectorAgent:
             return "\n".join(lines) or "Empty directory."
 
         @tool
-        def get_summary(file_path: str) -> str:
-            """Return a text preview of file_path (relative to base_dir)."""
-            path = (base / file_path).resolve()
-            if not path.is_relative_to(base):
-                return "Access denied."
-            if not path.is_file():
-                return "Not a file."
-            suffix = path.suffix.lower()
+        def get_summary(file_paths: list[str]) -> str:
+            """Return text previews for file paths (relative to base_dir).
 
-            if suffix not in {".md", ".markdown", ".txt"}:
-                return "Discarded: unsupported file type."
-            document_text = ""
+            Accepts a list of paths and returns one preview block per file.
+            """
+            if not file_paths:
+                return "No file paths provided."
 
-            if suffix in {".md", ".markdown"}:
-                try:
-                    markdown_text = path.read_text(errors="replace")
-                except OSError:
-                    return f"{suffix} file, {path.stat().st_size:,} bytes"
-                metadata = _extract_markdown_frontmatter(markdown_text)
-                if metadata:
-                    metadata_text = yaml.safe_dump(
-                        metadata,
-                        sort_keys=False,
-                        allow_unicode=True,
-                    ).strip()
-                    return metadata_text[:_SUMMARY_MAX_CHARS]
-                document_text = markdown_text.strip()
-            else:
-                try:
-                    document_text = path.read_text(errors="replace").strip()
-                except OSError:
-                    return f"{suffix or 'binary'} file, {path.stat().st_size:,} bytes"
+            limited_paths = file_paths[:_MAX_PREVIEW_FILES]
+            previews = [_preview_one_file(file_path) for file_path in limited_paths]
 
-            if not document_text:
-                return "No extractable text content."
+            if len(file_paths) > _MAX_PREVIEW_FILES:
+                previews.append(
+                    f"Truncated request: processed first {_MAX_PREVIEW_FILES} file paths "
+                    f"out of {len(file_paths)}."
+                )
 
-            summary_response = self._llm.invoke(
-                [
-                    SystemMessage(content="You are a concise document summarizer."),
-                    HumanMessage(
-                        content=(
-                            "Summarize this document concisely. Return ONLY the summary text. "
-                            "Do not include introductory phrases like 'Here is a summary'. "
-                            "Do not use double quotes, formatting, or line breaks "
-                            "in your response.\n\n"
-                            f"Document:\n{document_text[:_SUMMARY_INPUT_MAX_CHARS]}"
-                        )
-                    ),
-                ]
-            )
-            llm_output = str(summary_response.content)
-            safe_summary = llm_output.strip().replace('"', "'")
-            safe_summary = safe_summary.replace("\n", " ")
-            return safe_summary[:_SUMMARY_MAX_CHARS]
+            return "\n\n".join(previews)
 
         return [list_files, get_summary]
 
