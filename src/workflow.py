@@ -201,7 +201,6 @@ class CourseWorkflow:
                     script=current_script,
                     error_output=error_text,
                     topic=topic,
-                    lesson_content=lesson,
                 )
                 script_path.write_text(fixed)
                 print(f"  Overwritten script: {script_path}")
@@ -216,7 +215,6 @@ class CourseWorkflow:
                 script=current_script,
                 video_path=final_video,
                 topic=topic,
-                lesson_content=lesson,
             )
             tracker.record(f"Step 3 {iter_label} - video review", review_usage)
 

@@ -354,7 +354,6 @@ Generate a complete Manim script that:
         script: str,
         video_path: Path,
         topic: str,
-        lesson_content: str,
     ) -> tuple[str, bool, LLMUsage]:
         """Review the rendered video for visual issues using structured output.
 
@@ -485,7 +484,6 @@ Generate a complete Manim script that:
         script: str,
         error_output: str,
         topic: str,
-        lesson_content: str,
     ) -> tuple[str, LLMUsage]:
         """Ask the LLM to fix a script that failed to render.
 
