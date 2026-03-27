@@ -29,6 +29,7 @@ from matplotlib.widgets import Button  # type: ignore
 from PIL import Image
 
 from src.script_generator import ManimScriptGenerator, VideoReview
+from src.utils import format_timestamp
 
 BG = "#0d0d0d"
 SSIM_GREEN_THRESHOLD = 90
@@ -387,7 +388,7 @@ def main() -> None:
         if not raw:
             print("No still frames found.")
             sys.exit(1)
-        frames = [(f"Frame at {ManimScriptGenerator._format_timestamp(t)}", f) for t, f in raw]
+        frames = [(f"Frame at {format_timestamp(t)}", f) for t, f in raw]
         print(f"{len(frames)} still frames found (no SSIM dedup, no target limit).")
         FrameViewer(frames)
         return

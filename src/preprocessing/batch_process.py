@@ -1,3 +1,9 @@
+"""Batch preprocessing pipeline for raw course materials.
+
+This module walks an input directory and converts supported files to markdown
+in a mirrored output directory while tracking aggregated LLM usage cost.
+"""
+
 import shutil
 from pathlib import Path
 
@@ -60,6 +66,11 @@ def batch_process(
     output_dir: Path,
     local: bool = False,
 ) -> LLMUsage:
+    """Process all supported files under ``input_dir`` into ``output_dir``.
+
+    Supported file types are copied or converted to markdown/text depending on
+    type, and the total LLM usage cost is accumulated and returned.
+    """
     input_root = input_dir
     output_root = output_dir
     output_root.mkdir(parents=True, exist_ok=True)
