@@ -9,9 +9,12 @@ Run with:
     uv run pytest tests/test_cache.py -v
 """
 
+from __future__ import annotations
+
 import hashlib
 import wave
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -19,6 +22,10 @@ import pytest
 from pytest import MonkeyPatch
 
 from src.llm_metrics import LLMUsage
+
+if TYPE_CHECKING:
+    from src.models import StructuredLessonPlan
+    from src.workflow import CourseWorkflow
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -723,143 +730,192 @@ class TestWorkflowCacheIntegration:
         assert final.read_bytes() == b"cached video bytes"
         assert result["cache_hit"] == "video"
 
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_plan(markdown: str = "# plan") -> StructuredLessonPlan:
+        from src.models import StructuredLessonPlan, VideoSection
+
+        return StructuredLessonPlan(
+            title="Test Topic",
+            sections=[VideoSection(name="Introduction", description="Intro section")],
+            lesson_markdown=markdown,
+        )
+
+    @staticmethod
+    def _stub_script_generator(wf: CourseWorkflow, out_dir: Path) -> None:
+        """Replace script_generator with a MagicMock that writes stub script files."""
+
+        def _intro_effect(title: str, output_path: Path) -> None:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                "from manim import *\nclass IntroScene(Scene):\n    def construct(self): pass\n"
+            )
+
+        def _section_effect(**kwargs: object) -> LLMUsage:
+            path = kwargs.get("output_path")
+            if path:
+                Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
+                Path(str(path)).write_text(
+                    "from manim import *\nclass Section0Scene(Scene):\n"
+                    "    def construct(self): pass\n"
+                )
+            return LLMUsage()
+
+        def _outro_effect(
+            feedback_url: str,
+            output_path: Path,
+            qr_image_path: Path | None = None,
+        ) -> None:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                "from manim import *\nclass OutroScene(Scene):\n    def construct(self): pass\n"
+            )
+
+        wf.script_generator = MagicMock()
+        wf.script_generator.generate_intro_script.side_effect = _intro_effect
+        wf.script_generator.generate_section_script.side_effect = _section_effect
+        wf.script_generator.generate_outro_script.side_effect = _outro_effect
+        wf.script_generator.review_video.return_value = (
+            "from manim import *\nclass Section0Scene(Scene):\n    def construct(self): pass\n",
+            False,
+            LLMUsage(),
+        )
+        wf.script_generator.fix_model = "test-fix-model"
+
+    # ------------------------------------------------------------------
+    # Tests
+    # ------------------------------------------------------------------
+
     def test_script_cache_hit_skips_script_generation(
         self, tmp_path: Path, patched_cache_dir: Path, monkeypatch: MonkeyPatch
     ) -> None:
-        """If a cached script exists neither the script LLM nor the lesson-plan LLM is called."""
+        """If all cached scene scripts exist, neither the plan LLM nor script LLM is called."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
 
         topic = "Fourier Transform"
         slug = "fourier-transform"
-
         out_dir = tmp_path / "output"
 
-        _cached_script = (
-            "from manim import *\n\nclass FourierScene(Scene):\n    def construct(self): pass\n"
-        )
+        _stub = "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
+
         with (
             patch.object(CourseWorkflow, "generate_lesson_plan") as mock_plan,
             patch(
                 "src.workflow.render_and_merge",
-                return_value=out_dir / "fourier-transform.mp4",
+                return_value=out_dir / f"{slug}_section_0.mp4",
             ) as mock_render,
+            patch("src.workflow.add_progress_sidebar", return_value=out_dir / "sb.mp4"),
+            patch("src.workflow.concatenate_videos"),
             patch("src.workflow.save_video_to_cache"),
+            patch("src.workflow.save_scene_video_to_cache"),
         ):
             wf = CourseWorkflow(model="test-model")
-            # Script cache uses _build_script_context() (quality/TTS-independent)
-            ctx_hash = hash_context(
-                topic,
-                extra_context=wf._build_script_context(),
-            )
+            ctx_hash = hash_context(topic, extra_context=wf._build_script_context())
 
-            # Pre-populate script cache with a valid minimal Manim script + lesson plan
+            plan = self._make_plan()
             script_dir = patched_cache_dir / slug / "script"
             script_dir.mkdir(parents=True)
-            script_path = script_dir / f"{ctx_hash}.py"
-            script_path.write_text(_cached_script)
-            (script_dir / f"{ctx_hash}.md").write_text("# cached plan")
+            # Write the JSON plan and all three expected scene scripts
+            (script_dir / f"{ctx_hash}.json").write_text(plan.model_dump_json())
+            (script_dir / f"{ctx_hash}_intro.py").write_text(_stub)
+            (script_dir / f"{ctx_hash}_section_0.py").write_text(_stub)
+            (script_dir / f"{ctx_hash}_outro.py").write_text(_stub)
 
             wf.script_generator = MagicMock()
-            wf.script_generator.review_video.return_value = (_cached_script, False, LLMUsage())
+            wf.script_generator.review_video.return_value = (_stub, False, LLMUsage())
+            wf.script_generator.fix_model = "test-fix-model"
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
         mock_plan.assert_not_called()  # lesson plan is skipped
-        wf.script_generator.generate_and_save.assert_not_called()  # script is skipped
-        mock_render.assert_called_once()  # render still runs
+        wf.script_generator.generate_section_script.assert_not_called()  # scripts are skipped
+        assert mock_render.call_count > 0  # render still runs
 
     def test_fresh_run_render_called_with_lesson_name_and_hash(
         self, tmp_path: Path, patched_cache_dir: Path
     ) -> None:
-        """On a cache miss render_and_merge receives lesson_name and context_hash."""
+        """On a cache miss render_and_merge receives lesson_name and correct scene_tag."""
         from src.workflow import CourseWorkflow
 
         topic = "QR Decomposition"
         slug = "qr-decomposition"
         out_dir = tmp_path / "output"
-        fake_video = out_dir / f"{slug}.mp4"
+        out_dir.mkdir(parents=True)
+        fake_scene_video = out_dir / "scenes" / f"{slug}_section_0.mp4"
+        fake_scene_video.parent.mkdir(parents=True, exist_ok=True)
+        fake_scene_video.write_bytes(b"fake")
 
         with (
             patch.object(
-                CourseWorkflow, "generate_lesson_plan", return_value=("# plan", LLMUsage())
+                CourseWorkflow,
+                "generate_lesson_plan",
+                return_value=(self._make_plan(), LLMUsage()),
             ),
-            patch("src.workflow.render_and_merge", return_value=fake_video) as mock_render,
+            patch(
+                "src.workflow.render_and_merge",
+                return_value=fake_scene_video,
+            ) as mock_render,
+            patch("src.workflow.add_progress_sidebar", return_value=fake_scene_video),
+            patch("src.workflow.concatenate_videos"),
             patch("src.workflow.save_video_to_cache"),
+            patch("src.workflow.save_scene_video_to_cache"),
+            patch("src.workflow._try_generate_qr_code", return_value=False),
         ):
             wf = CourseWorkflow(model="test-model")
-
-            def _gen_save_effect(**kwargs: object) -> LLMUsage:
-                path = kwargs.get("output_path")
-                if path:
-                    Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
-                    Path(str(path)).write_text(
-                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
-                    )
-                return LLMUsage()
-
-            wf.script_generator = MagicMock()
-            wf.script_generator.generate_and_save.side_effect = _gen_save_effect
-            wf.script_generator.review_video.return_value = (
-                "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
-                False,
-                LLMUsage(),
-            )
+            self._stub_script_generator(wf, out_dir)
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
-        _, kwargs = mock_render.call_args
-        assert kwargs.get("lesson_name") == slug
-        # Iterative renders use context_hash=None; caching happens via save_video_to_cache
-        assert kwargs.get("context_hash") is None
+        # render_and_merge is called for each scene; all should have lesson_name
+        for call in mock_render.call_args_list:
+            _, kwargs = call
+            assert kwargs.get("lesson_name") == slug
+            # Iterative renders use context_hash=None; caching is done by save_video_to_cache
+            assert kwargs.get("context_hash") is None
 
     def test_lesson_plan_stored_alongside_script_as_md(
         self, tmp_path: Path, patched_cache_dir: Path
     ) -> None:
-        """Lesson plan is written as {hash}.md next to {hash}.py in script/."""
+        """Lesson plan is written as both {hash}.json and {hash}.md in script/."""
         from src.cache import hash_context
         from src.workflow import CourseWorkflow
 
         topic = "Eigenvalues"
         slug = "eigenvalues"
         out_dir = tmp_path / "output"
+        out_dir.mkdir(parents=True)
+        scenes_dir = out_dir / "scenes"
+        scenes_dir.mkdir(parents=True)
+
+        plan = self._make_plan("# my plan")
+        fake_video = scenes_dir / f"{slug}_section_0.mp4"
+        fake_video.write_bytes(b"fake")
 
         with (
             patch.object(
-                CourseWorkflow, "generate_lesson_plan", return_value=("# my plan", LLMUsage())
+                CourseWorkflow,
+                "generate_lesson_plan",
+                return_value=(plan, LLMUsage()),
             ),
-            patch(
-                "src.workflow.render_and_merge",
-                return_value=out_dir / f"{slug}.mp4",
-            ),
+            patch("src.workflow.render_and_merge", return_value=fake_video),
+            patch("src.workflow.add_progress_sidebar", return_value=fake_video),
+            patch("src.workflow.concatenate_videos"),
             patch("src.workflow.save_video_to_cache"),
+            patch("src.workflow.save_scene_video_to_cache"),
+            patch("src.workflow._try_generate_qr_code", return_value=False),
         ):
             wf = CourseWorkflow(model="test-model")
-            # Script files are keyed by _build_script_context() hash
-            script_hash = hash_context(
-                topic,
-                extra_context=wf._build_script_context(),
-            )
-
-            def _gen_save_effect(**kwargs: object) -> LLMUsage:
-                path = kwargs.get("output_path")
-                if path:
-                    Path(str(path)).parent.mkdir(parents=True, exist_ok=True)
-                    Path(str(path)).write_text(
-                        "from manim import *\nclass S(Scene):\n    def construct(self): pass\n"
-                    )
-                return LLMUsage()
-
-            wf.script_generator = MagicMock()
-            wf.script_generator.generate_and_save.side_effect = _gen_save_effect
-            wf.script_generator.review_video.return_value = (
-                "from manim import *\nclass S(Scene):\n    def construct(self): pass\n",
-                False,
-                LLMUsage(),
-            )
+            script_hash = hash_context(topic, extra_context=wf._build_script_context())
+            self._stub_script_generator(wf, out_dir)
             wf.run_full_pipeline(topic, output_dir=str(out_dir))
 
-        plan_path = patched_cache_dir / slug / "script" / f"{script_hash}.md"
-        assert plan_path.exists(), "lesson plan .md file should be in script/ dir"
-        assert plan_path.read_text() == "# my plan"
+        md_path = patched_cache_dir / slug / "script" / f"{script_hash}.md"
+        json_path = patched_cache_dir / slug / "script" / f"{script_hash}.json"
+        assert md_path.exists(), "lesson plan .md file should be in script/ dir"
+        assert md_path.read_text() == "# my plan"
+        assert json_path.exists(), "lesson plan .json file should be in script/ dir"
         # Must NOT write a stray lesson_plan.md at the per-lesson root
         assert not (patched_cache_dir / slug / "lesson_plan.md").exists()
 

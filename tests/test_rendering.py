@@ -24,7 +24,9 @@ class TestRenderAndMergeMoviepySafety:
         rendered_mp4.parent.mkdir(parents=True, exist_ok=True)
         rendered_mp4.write_bytes(b"fake-mp4")
 
-        merged_audio = audio_dir / "merged_audio.wav"
+        # render_and_merge with no lesson_name places the working audio in
+        # CACHE_AUDIO_DIR / <scene_tag> (defaults to "scene").
+        merged_audio = audio_dir / "scene" / "merged_audio.wav"
         merged_audio.parent.mkdir(parents=True, exist_ok=True)
         merged_audio.write_bytes(b"fake-wav")
 

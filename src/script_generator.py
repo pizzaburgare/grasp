@@ -7,19 +7,99 @@ import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
+<<<<<<< Updated upstream
+from src.llm_metrics import (
+    LLMUsage,
+    accumulate_llm_usage,
+    extract_llm_usage,
+    make_openrouter_llm,
+)
 from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
+=======
+from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
+from src.models import VideoSection
+from src.paths import MANIM_PROMPT, SECTION_SCRIPT_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
+>>>>>>> Stashed changes
 from src.review.algorithms import (
-    extract_video_frames_parts,
+    encode_selected_frames,
+    frame_ssim,
+    select_brightness_peak_frames,
 )
 from src.review.models import CodeFix, VideoReview
 from src.search_replace import flexible_search_and_replace
 from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
 
 load_dotenv()
+
+<<<<<<< Updated upstream
+REVIEW_OK_CACHE_SSIM_THRESHOLD = 0.98
+=======
+# ---------------------------------------------------------------------------
+# Intro / Outro Manim templates
+# ---------------------------------------------------------------------------
+
+_INTRO_TEMPLATE = '''\
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from manim import *
+
+
+class IntroScene(Scene):
+    def construct(self) -> None:
+        title = Text({title!r}, font_size=64, weight=BOLD)
+        subtitle = Text("", font_size=0)  # placeholder for spacing
+        VGroup(title, subtitle).arrange(DOWN, buff=0.4).move_to(ORIGIN)
+
+        self.play(FadeIn(title, shift=UP * 0.3, run_time=1.2))
+        self.wait(2.0)
+        self.play(FadeOut(title, shift=DOWN * 0.3, run_time=0.8))
+'''
+
+_OUTRO_TEMPLATE = '''\
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from manim import *
+from src.audiomanager import AudioManager
+
+
+class OutroScene(Scene):
+    def construct(self) -> None:
+        audio_manager = AudioManager(self)
+
+        feedback_text = Text("Enjoyed this lesson?", font_size=42, weight=BOLD)
+        url_label = Text({url!r}, font_size=24, color=BLUE)
+        qr_label = Text("Scan the QR code or visit the link above to leave feedback.",
+                        font_size=20, color=GRAY)
+
+        group = VGroup(feedback_text, url_label, qr_label).arrange(DOWN, buff=0.5)
+{qr_section}
+        audio_manager.say("Thanks for watching! Scan the QR code or visit the link "
+                          "to share your feedback — it really helps us improve.")
+        self.play(FadeIn(display_group, run_time=1.0))
+        audio_manager.done_say()
+        self.wait(1.0)
+        self.play(FadeOut(display_group, run_time=0.8))
+        audio_manager.merge_audio()
+'''
+
+# ImageMobject is a raster object and cannot go into VGroup — use Group instead.
+_QR_SECTION_WITH_IMAGE = '''\
+        qr_img = ImageMobject({qr_path!r}).scale_to_fit_height(2.5)
+        display_group = Group(group, qr_img).arrange(RIGHT, buff=1.0).move_to(ORIGIN)
+'''
+
+_QR_SECTION_NO_IMAGE = '''\
+        display_group = group.move_to(ORIGIN)
+'''
+>>>>>>> Stashed changes
 
 
 class ManimScriptGenerator:
@@ -44,32 +124,122 @@ class ManimScriptGenerator:
         with open(MANIM_PROMPT, encoding="utf-8") as f:
             self.system_prompt = f.read()
 
+        with open(SECTION_SCRIPT_PROMPT, encoding="utf-8") as f:
+            self.section_system_prompt = f.read()
+
         with open(VIDEO_REVIEW_PROMPT, encoding="utf-8") as f:
             self.review_prompt_template = f.read()
 
         with open(VIDEO_FIX_PROMPT, encoding="utf-8") as f:
             self.fix_prompt = f.read()
 
+<<<<<<< Updated upstream
+        # Caches approved frames during one render/review loop so similar
+        # frames in later iterations can skip redundant LLM checks.
+        self._approved_review_frames: list[np.ndarray] = []
+
+    def reset_review_cache(self) -> None:
+        """Clear the per-loop approved-frame cache used by review_video."""
+        self._approved_review_frames.clear()
+
+    def _matches_approved_frame(self, frame: np.ndarray) -> bool:
+        """Return True if frame is highly similar to any previously approved frame."""
+        return any(
+            frame_ssim(approved, frame) >= REVIEW_OK_CACHE_SSIM_THRESHOLD
+            for approved in self._approved_review_frames
+        )
+
     def generate_script(
+=======
+    # ------------------------------------------------------------------
+    # Template-based generators (no LLM)
+    # ------------------------------------------------------------------
+
+    def generate_intro_script(self, title: str, output_path: Path) -> None:
+        """Write a standardised intro scene (fade-in title card, ~4 s)."""
+        code = _INTRO_TEMPLATE.format(title=title)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(code)
+        print(f"Intro script written: {output_path}")
+
+    def generate_outro_script(
+>>>>>>> Stashed changes
         self,
-        lesson_content: str,
+        feedback_url: str,
+        output_path: Path,
+        qr_image_path: Path | None = None,
+    ) -> None:
+        """Write a standardised outro scene (~5 s) with QR code / feedback URL."""
+        if qr_image_path is not None and qr_image_path.exists():
+            qr_section = _QR_SECTION_WITH_IMAGE.format(qr_path=str(qr_image_path))
+        else:
+            qr_section = _QR_SECTION_NO_IMAGE
+
+        code = _OUTRO_TEMPLATE.format(url=feedback_url, qr_section=qr_section)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(code)
+        print(f"Outro script written: {output_path}")
+
+    # ------------------------------------------------------------------
+    # LLM-based section generator
+    # ------------------------------------------------------------------
+
+    def generate_section_script(
+        self,
+        section: VideoSection,
+        all_sections: list[VideoSection],
+        lesson_markdown: str,
         topic: str,
+        section_idx: int,
+        output_path: Path,
         input_parts: list[dict[str, Any]] | None = None,
-    ) -> tuple[str, LLMUsage]:
-        text = f"""Topic: {topic}
+    ) -> LLMUsage:
+        """Generate and save a Manim script for one content section.
 
-Lesson Content:
-\"\"\"
-{lesson_content}
-\"\"\"
+        Parameters
+        ----------
+        section:
+            The section being generated.
+        all_sections:
+            All sections (for context — so the generator understands where this
+            section sits in the overall video).
+        lesson_markdown:
+            Full lesson plan for reference.
+        topic:
+            The overall video topic.
+        section_idx:
+            0-based index of this section.
+        output_path:
+            Destination ``.py`` file.
+        input_parts:
+            Optional raw input material parts forwarded from the pipeline.
+        """
+        scene_class_name = f"Section{section_idx}Scene"
+        all_section_names = [s.name for s in all_sections]
 
-Generate a complete Manim script that:
-1. Teaches this topic step-by-step with clear visuals
-2. Uses AudioManager for narration at each step
-3. Includes mathematical equations and geometric animations where appropriate
-4. Follows the exact pattern from the system prompt
-5. Is production-ready and can be directly executed by manim
-"""
+        text = (
+            f"Topic: {topic}\n\n"
+            f"You are generating section {section_idx + 1} of {len(all_sections)}.\n\n"
+            f"**All sections (shown in progress sidebar):**\n"
+            + "\n".join(
+                f"  {'→ ' if i == section_idx else '  '}{i + 1}. {s.name}"
+                for i, s in enumerate(all_sections)
+            )
+            + f"\n\n**Your section:** {section.name}\n"
+            f"**What to cover:** {section.description}\n\n"
+            f"**Scene class name:** `{scene_class_name}`\n\n"
+            f"**Full lesson plan (for reference):**\n\"\"\"\n{lesson_markdown}\n\"\"\"\n\n"
+            f"Generate a complete Manim scene that:\n"
+            f"1. Covers ONLY this section's content (not other sections)\n"
+            f"2. Uses `{scene_class_name}` as the class name\n"
+            f"3. Keeps all visuals in the right 75 % of the frame (left 22 % is reserved "
+            f"for the progress sidebar overlay)\n"
+            f"4. Uses AudioManager for narration\n"
+            f"5. Ends with `audio_manager.merge_audio()`\n"
+            f"6. Is production-ready and can be directly executed by manim\n"
+            f"\n"
+            f"All section names for context: {all_section_names}"
+        )
 
         if input_parts:
             user_content: list[str | dict[str, Any]] = [
@@ -81,13 +251,23 @@ Generate a complete Manim script that:
             user_content = [{"type": "text", "text": text}]
 
         messages = [
-            SystemMessage(content=self.system_prompt),
+            SystemMessage(content=self.section_system_prompt),
             HumanMessage(content=user_content),
         ]
 
+        print(f"  Generating section {section_idx + 1}/{len(all_sections)}: {section.name!r} ...")
         response = self.llm.invoke(messages)
         usage = extract_llm_usage(response)
-        return self._clean_code_output(str(response.content)), usage
+        code = self._clean_code_output(str(response.content))
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(code)
+        print(f"  Section script written: {output_path}")
+        return usage
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
     def _clean_code_output(self, code: str) -> str:
         code = code.strip()
@@ -114,21 +294,6 @@ Generate a complete Manim script that:
         pattern = re.compile(r'((?:Text|Title)\()(["\'])(.*?)\2', re.DOTALL)
         return pattern.sub(_escape_arg, code)
 
-    def generate_and_save(
-        self,
-        lesson_content: str,
-        topic: str,
-        output_path: str | Path,
-        input_parts: list[dict[str, Any]] | None = None,
-    ) -> LLMUsage:
-        print(f"Generating Manim script ({self.model}) ...")
-        script, usage = self.generate_script(lesson_content, topic, input_parts)
-        out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(script)
-        print(f"Script saved: {out}")
-        return usage
-
     # ------------------------------------------------------------------
     # Iteration helpers
     # ------------------------------------------------------------------
@@ -149,10 +314,11 @@ Generate a complete Manim script that:
         passed review; otherwise *script* contains the corrected code.
         """
         print("Reviewing rendered video for visual issues ...")
-        frames = extract_video_frames_parts(video_path, algorithm="brightness-peaks")
-        if not frames:
+        selected_frames = select_brightness_peak_frames(video_path)
+        if not selected_frames:
             print("  Could not extract frames - skipping review.")
             return script, False, LLMUsage()
+        frames = encode_selected_frames(selected_frames)
 
         print(f"  Reviewing {len(frames)} unique frames one-by-one ...")
 
@@ -163,8 +329,18 @@ Generate a complete Manim script that:
         # Collect frames that have issues
         flagged: list[tuple[str, dict[str, Any], list[str], str | None]] = []
         total_usage = LLMUsage()
+        skipped_from_cache = 0
+        reviewed_count = 0
 
-        for i, (label, img_part) in enumerate(frames, 1):
+        for i, ((_, frame_arr), (label, img_part)) in enumerate(
+            zip(selected_frames, frames, strict=True), 1
+        ):
+            if self._matches_approved_frame(frame_arr):
+                skipped_from_cache += 1
+                print(f"  [{i}/{len(frames)}] {label}: SKIP (SSIM >= 90% to approved frame)")
+                continue
+
+            reviewed_count += 1
             user_content: list[str | dict[str, Any]] = [
                 {"type": "text", "text": review_text},
                 {"type": "text", "text": label},
@@ -173,23 +349,28 @@ Generate a complete Manim script that:
             result = structured_llm.invoke([sys_msg, HumanMessage(content=user_content)])
             review: VideoReview = result["parsed"]  # type: ignore[index]
             usage = extract_llm_usage(result["raw"])  # type: ignore[index]
-            total_usage = LLMUsage(
-                prompt_tokens=total_usage.prompt_tokens + usage.prompt_tokens,
-                completion_tokens=total_usage.completion_tokens + usage.completion_tokens,
-                total_tokens=total_usage.total_tokens + usage.total_tokens,
-                cost_usd=(total_usage.cost_usd or 0) + (usage.cost_usd or 0) or None,
-            )
+            accumulate_llm_usage(total_usage, usage)
 
             if review.has_issues:
                 failed = review.failed_criteria()
                 flagged.append((label, img_part, failed, review.notes))
                 status = f"ISSUES ({', '.join(failed)})"
             else:
+                self._approved_review_frames.append(frame_arr.copy())
                 status = "OK"
             print(f"  [{i}/{len(frames)}] {label}: {status}")
 
+        if skipped_from_cache:
+            print(
+                f"  Skipped {skipped_from_cache} frame(s) due to SSIM cache "
+                f"(threshold {int(REVIEW_OK_CACHE_SSIM_THRESHOLD * 100)}%)."
+            )
+
         if not flagged:
-            print("  Video review: APPROVED - no issues found in any frame.")
+            if reviewed_count == 0:
+                print("  Video review: APPROVED - all frames matched previously approved content.")
+            else:
+                print("  Video review: APPROVED - no issues found in any reviewed frame.")
             return script, False, total_usage
 
         # Aggregate all unique failed criteria across flagged frames

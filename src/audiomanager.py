@@ -158,7 +158,6 @@ class AudioManager:
         _audio_log(f": Starting new section - {section_name}")
         time = self.scene.renderer.time
         ts_string = format_timestamp(time)
-
         self.chapters.append((section_name, ts_string))
 
     def say(self, text: str) -> None:
@@ -224,6 +223,15 @@ class AudioManager:
             wav_file.setsampwidth(sample_width)
             wav_file.setframerate(sample_rate)
             wav_file.writeframes(audio_data.tobytes())
+
+        # Prefer absolute placement at t=0 to avoid floating-point cancellation
+        # issues from time_offset=-current_time.
+        file_writer = self.scene.renderer.file_writer
+        if file_writer is not None:
+            file_writer.add_sound(str(merged_path), time=0)
+        else:
+            current_time = self.scene.renderer.time
+            self.scene.add_sound(str(merged_path), time_offset=-current_time)
 
         _audio_log(f"AudioManager: Merged {self.i} audio files to {merged_path}")
         yt_timestamps = "\n".join(f"{name}: {ts}" for name, ts in self.chapters)

@@ -27,6 +27,10 @@ VIDEO_REVIEW_MODEL: str = os.getenv("VIDEO_REVIEW_MODEL", DEFAULT_LLM_MODEL)
 VIDEO_FIX_MODEL: str = os.getenv("VIDEO_FIX_MODEL", DEFAULT_LLM_MODEL)
 DOCUMENT_SELECTOR_MODEL: str = os.getenv("DOCUMENT_SELECTOR_MODEL", DEFAULT_LLM_MODEL)
 
+# URL shown in the outro scene (QR code + text).
+# Override via FEEDBACK_URL env var.
+FEEDBACK_URL: str = os.getenv("FEEDBACK_URL", "https://forms.gle/feedback")
+
 
 def tts_config_fingerprint(tts_engine: str) -> dict[str, str]:
     """Return env vars that materially affect the selected TTS output."""

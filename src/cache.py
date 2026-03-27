@@ -162,3 +162,32 @@ def save_video_to_cache(lesson_name: str, context_hash: str, video_path: Path) -
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(video_path, dest)
     return dest
+
+
+# ---------------------------------------------------------------------------
+# Per-scene video cache (individual rendered clips)
+# ---------------------------------------------------------------------------
+
+
+def get_cached_scene_video(lesson_name: str, scene_tag: str, scene_hash: str) -> Path | None:
+    """Return the cached per-scene video path if it exists, else ``None``.
+
+    Scene videos are stored as ``{scene_tag}_{scene_hash}.mp4`` in the same
+    ``video/`` directory as the final assembled video, so a partially-completed
+    pipeline run can be resumed without re-rendering already-finished scenes.
+    """
+    p = get_lesson_cache_dir(lesson_name) / "video" / f"{scene_tag}_{scene_hash}.mp4"
+    return p if p.exists() else None
+
+
+def save_scene_video_to_cache(
+    lesson_name: str,
+    scene_tag: str,
+    scene_hash: str,
+    video_path: Path,
+) -> Path:
+    """Copy *video_path* into the per-scene video cache and return the destination."""
+    dest = get_lesson_cache_dir(lesson_name) / "video" / f"{scene_tag}_{scene_hash}.mp4"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(video_path, dest)
+    return dest

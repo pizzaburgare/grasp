@@ -1,12 +1,9 @@
 import ast
-import contextlib
 import logging
 import os
 import shutil
 import sys
 from pathlib import Path
-
-from moviepy import AudioFileClip, VideoFileClip
 
 from src.cache import get_audio_cache_dir, get_lesson_cache_dir, save_video_to_cache
 from src.command_runner import run_command
@@ -64,19 +61,27 @@ def render_and_merge(
     *,
     lesson_name: str | None = None,
     context_hash: str | None = None,
+    scene_tag: str | None = None,
 ) -> Path:
     """Render the Manim script and merge TTS audio into the final video.
 
     When *lesson_name* and *context_hash* are supplied:
     - ``AUDIO_CACHE_DIR`` is set to ``<lesson>/audio/`` (persistent hash store)
-    - ``AUDIO_OUTPUT_DIR`` is set to ``<lesson>/audio/work/`` (numbered working
-      files + ``merged_audio.wav``; cleaned up on success)
+    - ``AUDIO_OUTPUT_DIR`` is set to ``<lesson>/audio/work/<scene_tag>/``
+      (numbered working files + ``merged_audio.wav``; cleaned up on success)
     - The finished video is written into the video cache.
+
+    *scene_tag* (e.g. ``"intro"``, ``"section_0"``, ``"outro"``) isolates the
+    audio working directory so that multiple scenes can be rendered without
+    overwriting each other's numbered WAV files.  Defaults to ``"scene"`` when
+    not provided.
     """
     scene_class = detect_scene_class(script_path)
     quality_flag = "-qh" if final_quality else "-ql"
     quality_label = "high" if final_quality else "low"
     print(f"Rendering scene: {scene_class} ({quality_label} quality)")
+
+    effective_tag = scene_tag or "scene"
 
     # Set up audio directories and environment.
     # The Python variables are used for dir creation, cleanup, and caching;
@@ -85,11 +90,11 @@ def render_and_merge(
     env["AUDIO_MANAGER_VERBOSE"] = "0"
     if lesson_name:
         audio_cache_dir = get_audio_cache_dir(lesson_name)
-        audio_work_dir = audio_cache_dir / "work"
+        audio_work_dir = audio_cache_dir / "work" / effective_tag
         env["AUDIO_CACHE_DIR"] = str(audio_cache_dir)
     else:
         audio_cache_dir = CACHE_AUDIO_DIR
-        audio_work_dir = CACHE_AUDIO_DIR
+        audio_work_dir = CACHE_AUDIO_DIR / effective_tag
     env["AUDIO_OUTPUT_DIR"] = str(audio_work_dir)
 
     cache_manim = CACHE_MANIM_DIR
@@ -118,28 +123,15 @@ def render_and_merge(
     print(f"Video rendered: {video_path}")
 
     # Merge audio
-    merged_audio = audio_work_dir / "merged_audio.wav"
     output_dir.mkdir(parents=True, exist_ok=True)
-    final_path = output_dir / f"{topic_slug}.mp4"
-
-    if not merged_audio.exists():
-        print("No merged_audio.wav found - copying video without audio")
-        shutil.copy2(video_path, final_path)
+    # When a scene_tag is provided the output file is named after the tag so
+    # individual scene clips don't overwrite each other.
+    if scene_tag:
+        final_path = output_dir / f"{topic_slug}_{scene_tag}.mp4"
     else:
-        print("Merging audio into video ...")
-        moviepy_logger = logging.getLogger("moviepy")
-        with contextlib.ExitStack() as stack:
-            stack.callback(moviepy_logger.setLevel, moviepy_logger.level)
-            moviepy_logger.setLevel(logging.ERROR)
-            video_clip = VideoFileClip(str(video_path))
-            stack.callback(video_clip.close)
-            audio_clip = AudioFileClip(str(merged_audio))
-            stack.callback(audio_clip.close)
-            final_clip = video_clip.with_audio(audio_clip)
-            stack.callback(final_clip.close)
-            final_clip.write_videofile(
-                str(final_path), codec="libx264", audio_codec="aac", logger=None, threads=4
-            )
+        final_path = output_dir / f"{topic_slug}.mp4"
+
+    shutil.copy2(video_path, final_path)
 
     print(f"Final video: {final_path}")
 
@@ -149,7 +141,9 @@ def render_and_merge(
             f"Video cached: {get_lesson_cache_dir(lesson_name) / 'video' / f'{context_hash}.mp4'}"
         )
 
-    # Clean up working audio files - hash-named cache files are preserved
+    # Clean up working audio files - hash-named cache files are preserved.
+    # audio_work_dir is always a subdirectory of audio_cache_dir (either
+    # "work/<tag>" or a legacy flat dir), so it's safe to remove it.
     if audio_work_dir != audio_cache_dir:
         shutil.rmtree(audio_work_dir, ignore_errors=True)
 
