@@ -125,10 +125,7 @@ def accumulate_llm_usage(total: LLMUsage, usage: LLMUsage | None) -> None:
     total.completion_tokens += usage.completion_tokens
     total.total_tokens += usage.total_tokens
 
-    if total.cost_usd is None or usage.cost_usd is None:
-        total.cost_usd = None
-    else:
-        total.cost_usd += usage.cost_usd
+    total.cost_usd = (total.cost_usd or 0) + (usage.cost_usd or 0) or None
 
 
 def combine_llm_usage(usages: list[LLMUsage | None]) -> LLMUsage | None:
