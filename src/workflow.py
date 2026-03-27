@@ -165,7 +165,6 @@ class CourseWorkflow:
     def _render_loop(
         self,
         topic: str,
-        lesson: str,
         slug: str,
         script_path: Path,
         out: Path,
@@ -176,6 +175,8 @@ class CourseWorkflow:
     ) -> Path:
         max_iters = MAX_SCRIPT_ITERATIONS
         final_video: Path | None = None
+
+        self.script_generator.reset_review_cache()
 
         for iteration in range(max_iters):
             iter_label = f"[iter {iteration + 1}/{max_iters}]"
@@ -378,7 +379,7 @@ class CourseWorkflow:
 
         # Step 3: Render + review loop
         final_video = self._render_loop(
-            topic, lesson, slug, script_path, out, video_hash, final_quality, skip_review, tracker
+            topic, slug, script_path, out, video_hash, final_quality, skip_review, tracker
         )
 
         print()

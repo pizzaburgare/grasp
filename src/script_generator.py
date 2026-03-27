@@ -7,19 +7,29 @@ import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
+from src.llm_metrics import (
+    LLMUsage,
+    accumulate_llm_usage,
+    extract_llm_usage,
+    make_openrouter_llm,
+)
 from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
 from src.review.algorithms import (
-    extract_video_frames_parts,
+    encode_selected_frames,
+    frame_ssim,
+    select_brightness_peak_frames,
 )
 from src.review.models import CodeFix, VideoReview
 from src.search_replace import flexible_search_and_replace
 from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
 
 load_dotenv()
+
+REVIEW_OK_CACHE_SSIM_THRESHOLD = 0.98
 
 
 class ManimScriptGenerator:
@@ -49,6 +59,21 @@ class ManimScriptGenerator:
 
         with open(VIDEO_FIX_PROMPT, encoding="utf-8") as f:
             self.fix_prompt = f.read()
+
+        # Caches approved frames during one render/review loop so similar
+        # frames in later iterations can skip redundant LLM checks.
+        self._approved_review_frames: list[np.ndarray] = []
+
+    def reset_review_cache(self) -> None:
+        """Clear the per-loop approved-frame cache used by review_video."""
+        self._approved_review_frames.clear()
+
+    def _matches_approved_frame(self, frame: np.ndarray) -> bool:
+        """Return True if frame is highly similar to any previously approved frame."""
+        return any(
+            frame_ssim(approved, frame) >= REVIEW_OK_CACHE_SSIM_THRESHOLD
+            for approved in self._approved_review_frames
+        )
 
     def generate_script(
         self,
@@ -149,10 +174,11 @@ Generate a complete Manim script that:
         passed review; otherwise *script* contains the corrected code.
         """
         print("Reviewing rendered video for visual issues ...")
-        frames = extract_video_frames_parts(video_path, algorithm="brightness-peaks")
-        if not frames:
+        selected_frames = select_brightness_peak_frames(video_path)
+        if not selected_frames:
             print("  Could not extract frames - skipping review.")
             return script, False, LLMUsage()
+        frames = encode_selected_frames(selected_frames)
 
         print(f"  Reviewing {len(frames)} unique frames one-by-one ...")
 
@@ -163,8 +189,18 @@ Generate a complete Manim script that:
         # Collect frames that have issues
         flagged: list[tuple[str, dict[str, Any], list[str], str | None]] = []
         total_usage = LLMUsage()
+        skipped_from_cache = 0
+        reviewed_count = 0
 
-        for i, (label, img_part) in enumerate(frames, 1):
+        for i, ((_, frame_arr), (label, img_part)) in enumerate(
+            zip(selected_frames, frames, strict=True), 1
+        ):
+            if self._matches_approved_frame(frame_arr):
+                skipped_from_cache += 1
+                print(f"  [{i}/{len(frames)}] {label}: SKIP (SSIM >= 90% to approved frame)")
+                continue
+
+            reviewed_count += 1
             user_content: list[str | dict[str, Any]] = [
                 {"type": "text", "text": review_text},
                 {"type": "text", "text": label},
@@ -173,23 +209,28 @@ Generate a complete Manim script that:
             result = structured_llm.invoke([sys_msg, HumanMessage(content=user_content)])
             review: VideoReview = result["parsed"]  # type: ignore[index]
             usage = extract_llm_usage(result["raw"])  # type: ignore[index]
-            total_usage = LLMUsage(
-                prompt_tokens=total_usage.prompt_tokens + usage.prompt_tokens,
-                completion_tokens=total_usage.completion_tokens + usage.completion_tokens,
-                total_tokens=total_usage.total_tokens + usage.total_tokens,
-                cost_usd=(total_usage.cost_usd or 0) + (usage.cost_usd or 0) or None,
-            )
+            accumulate_llm_usage(total_usage, usage)
 
             if review.has_issues:
                 failed = review.failed_criteria()
                 flagged.append((label, img_part, failed, review.notes))
                 status = f"ISSUES ({', '.join(failed)})"
             else:
+                self._approved_review_frames.append(frame_arr.copy())
                 status = "OK"
             print(f"  [{i}/{len(frames)}] {label}: {status}")
 
+        if skipped_from_cache:
+            print(
+                f"  Skipped {skipped_from_cache} frame(s) due to SSIM cache "
+                f"(threshold {int(REVIEW_OK_CACHE_SSIM_THRESHOLD * 100)}%)."
+            )
+
         if not flagged:
-            print("  Video review: APPROVED - no issues found in any frame.")
+            if reviewed_count == 0:
+                print("  Video review: APPROVED - all frames matched previously approved content.")
+            else:
+                print("  Video review: APPROVED - no issues found in any reviewed frame.")
             return script, False, total_usage
 
         # Aggregate all unique failed criteria across flagged frames

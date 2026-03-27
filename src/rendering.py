@@ -1,12 +1,9 @@
 import ast
-import contextlib
 import logging
 import os
 import shutil
 import sys
 from pathlib import Path
-
-from moviepy import AudioFileClip, VideoFileClip
 
 from src.cache import get_audio_cache_dir, get_lesson_cache_dir, save_video_to_cache
 from src.command_runner import run_command
@@ -118,28 +115,10 @@ def render_and_merge(
     print(f"Video rendered: {video_path}")
 
     # Merge audio
-    merged_audio = audio_work_dir / "merged_audio.wav"
     output_dir.mkdir(parents=True, exist_ok=True)
     final_path = output_dir / f"{topic_slug}.mp4"
 
-    if not merged_audio.exists():
-        print("No merged_audio.wav found - copying video without audio")
-        shutil.copy2(video_path, final_path)
-    else:
-        print("Merging audio into video ...")
-        moviepy_logger = logging.getLogger("moviepy")
-        with contextlib.ExitStack() as stack:
-            stack.callback(moviepy_logger.setLevel, moviepy_logger.level)
-            moviepy_logger.setLevel(logging.ERROR)
-            video_clip = VideoFileClip(str(video_path))
-            stack.callback(video_clip.close)
-            audio_clip = AudioFileClip(str(merged_audio))
-            stack.callback(audio_clip.close)
-            final_clip = video_clip.with_audio(audio_clip)
-            stack.callback(final_clip.close)
-            final_clip.write_videofile(
-                str(final_path), codec="libx264", audio_codec="aac", logger=None, threads=4
-            )
+    shutil.copy2(video_path, final_path)
 
     print(f"Final video: {final_path}")
 
