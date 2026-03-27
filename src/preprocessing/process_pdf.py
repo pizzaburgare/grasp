@@ -8,7 +8,7 @@ import yaml
 from langchain_core.messages import HumanMessage, SystemMessage
 from markitdown import MarkItDown
 
-from src.llm_metrics import extract_llm_usage, make_openrouter_llm
+from src.llm_metrics import LLMUsage, combine_llm_usage, extract_llm_usage, make_openrouter_llm
 from src.paths import PDF_TRANSCRIBER_PROMPT
 
 MIN_FENCE_LINES = 2
@@ -66,7 +66,7 @@ def pdf_to_md_llm(
     input_path: str,
     output_path: str | None = None,
     model: str = "google/gemini-3-flash-preview",
-) -> float:
+) -> LLMUsage | None:
     """
     Sends a PDF to an LLM, then generates a concise summary.
     Optionally writes Markdown with summary frontmatter to output_path.
@@ -100,7 +100,7 @@ def pdf_to_md_llm(
     response = llm.invoke(messages)
     markdown = strip_outer_markdown_fence(str(response.content))
 
-    transcription_cost = extract_llm_usage(response).cost_usd
+    transcription_usage = extract_llm_usage(response)
 
     summary_response = llm.invoke(
         [
@@ -128,28 +128,21 @@ def pdf_to_md_llm(
     frontmatter = f"---\n{yaml_metadata}\n---\n\n"
     final_document = frontmatter + markdown
 
-    summary_cost = extract_llm_usage(summary_response).cost_usd
-
-    cost = 0.0
-    if transcription_cost is not None:
-        cost += transcription_cost
-    if summary_cost is not None:
-        cost += summary_cost
+    summary_usage = extract_llm_usage(summary_response)
 
     if output_path:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(final_document)
         print(f"LLM transcription saved to: {output_path}")
 
-    return cost
+    return combine_llm_usage([transcription_usage, summary_usage])
 
 
-def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False) -> float:
+def convert_pdf_to_md(input_file: str, output_file: str, local: bool = False) -> LLMUsage | None:
     if local:
         local_pdf_conversion(input_file, output_file)
-        return 0.0
-    else:
-        return pdf_to_md_llm(input_file, output_file)
+        return None
+    return pdf_to_md_llm(input_file, output_file)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from moviepy import VideoFileClip  # type: ignore
 from PIL import Image
 
-from src.llm_metrics import extract_llm_usage, make_openrouter_llm
+from src.llm_metrics import LLMUsage, combine_llm_usage, extract_llm_usage, make_openrouter_llm
 
 
 def _extract_audio(video_path: str, output_path: str) -> None:
@@ -39,7 +39,7 @@ def _parse_start_times(transcription: str) -> list[float]:
 
 def _describe_frame(
     video_path: str, timestamp: float, model: str = "google/gemini-2.0-flash-001"
-) -> tuple[float, str]:
+) -> tuple[LLMUsage | None, str]:
     """Extracts a frame at the given timestamp and returns an LLM description."""
     try:
         video_clip = VideoFileClip(video_path)
@@ -67,19 +67,15 @@ def _describe_frame(
         ]
 
         response = llm.invoke(messages)
-        cost = extract_llm_usage(response).cost_usd
-
-        if cost is None:
-            cost = 0.0
+        usage = extract_llm_usage(response)
 
     except Exception as e:  # noqa: BLE001
         print(f"An error occurred while processing the frame: {e}")
-        return (0.0, f"Error processing image at {timestamp:.2f}s")
-    else:
-        return (cost, f"Description of image at {timestamp:.2f}s: {response.content}")
+        return (None, f"Error processing image at {timestamp:.2f}s")
+    return (usage, f"Description of image at {timestamp:.2f}s: {response.content}")
 
 
-def mp4_to_text(video_path: str, output_path: str) -> float:
+def mp4_to_text(video_path: str, output_path: str) -> LLMUsage | None:
     """
     Converts an MP4 to a text file containing timestamped transcription and
     VLM frame descriptions for each segment. Uses a temp file for intermediate audio.
@@ -91,18 +87,18 @@ def mp4_to_text(video_path: str, output_path: str) -> float:
     lines = transcription.splitlines()
     times = _parse_start_times(transcription)
 
-    total_cost = 0.0
+    usages: list[LLMUsage | None] = []
     output = ""
     for time, line in zip(times, lines, strict=False):
         output += f"{line.strip()}\n"
-        cost, description = _describe_frame(video_path, time)
-        total_cost += cost
+        usage, description = _describe_frame(video_path, time)
+        usages.append(usage)
         output += description + "\n"
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(output)
 
-    return total_cost
+    return combine_llm_usage(usages)
 
 
 if __name__ == "__main__":

@@ -938,10 +938,10 @@ class TestRenderAndMergeVideoSelection:
             "from manim import *\nclass NewScene(Scene):\n    def construct(self): pass\n"
         )
 
-        # Patch CommandRunner.run to be a no-op (render already "done")
+        # Patch run_command to be a no-op (render already "done")
         with (
             patch(
-                "src.rendering.CommandRunner.run",
+                "src.rendering.run_command",
                 return_value=MagicMock(returncode=0),
             ),
             patch("src.rendering.VideoFileClip"),
@@ -981,7 +981,7 @@ class TestRenderAndMergeVideoSelection:
         )
 
         with patch(
-            "src.rendering.CommandRunner.run",
+            "src.rendering.run_command",
             return_value=MagicMock(returncode=0),
         ):
             copied: dict[str, Path] = {}
@@ -1016,7 +1016,7 @@ class TestRenderAndMergeVideoSelection:
 
         with (
             patch(
-                "src.rendering.CommandRunner.run",
+                "src.rendering.run_command",
                 return_value=MagicMock(returncode=0),
             ),
             pytest.raises(FileNotFoundError),

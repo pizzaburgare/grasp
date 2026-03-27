@@ -48,7 +48,7 @@ class TestRenderAndMergeMoviepySafety:
         video_clip.with_audio.return_value = final_clip
 
         with (
-            patch("src.rendering.CommandRunner.run", return_value=MagicMock(returncode=0)),
+            patch("src.rendering.run_command", return_value=MagicMock(returncode=0)),
             patch("src.rendering.VideoFileClip", return_value=video_clip),
             patch("src.rendering.AudioFileClip", return_value=audio_clip),
         ):

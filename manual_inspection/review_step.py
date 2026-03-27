@@ -30,6 +30,7 @@ from moviepy import VideoFileClip
 from PIL import Image
 
 from src.script_generator import ManimScriptGenerator, VideoReview
+from src.utils import format_timestamp
 
 BG = "#0d0d0d"
 SSIM_GREEN_THRESHOLD = 90
@@ -150,7 +151,7 @@ def _encode_selected_frames(
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=REVIEW_FRAME_QUALITY)
         data = base64.b64encode(buf.getvalue()).decode()
-        label = f"Frame at {ManimScriptGenerator._format_timestamp(chosen_t)}"
+        label = f"Frame at {format_timestamp(chosen_t)}"
         parts.append(
             (
                 label,
@@ -542,11 +543,9 @@ def main() -> None:
         if not raw:
             print("No still frames found.")
             sys.exit(1)
-        still_frames = [
-            (f"Frame at {ManimScriptGenerator._format_timestamp(t)}", f) for t, f in raw
-        ]
-        print(f"{len(still_frames)} still frames found (no SSIM dedup, no target limit).")
-        FrameViewer(still_frames)
+        frames = [(f"Frame at {format_timestamp(t)}", f) for t, f in raw]
+        print(f"{len(frames)} still frames found (no SSIM dedup, no target limit).")
+        FrameViewer(frames)
         return
 
     print(f"Extracting frames from: {video_path}")

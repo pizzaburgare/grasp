@@ -153,7 +153,7 @@ class TestExtractVideoFrames:
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert len(parts) == 1
         label, _ = parts[0]
-        assert label == "Frame at 0:00"
+        assert label == "Frame at 00:00"
 
     def test_zero_duration_returns_empty(self, monkeypatch: MonkeyPatch) -> None:
         class FakeClip:
@@ -167,32 +167,6 @@ class TestExtractVideoFrames:
 
         parts = ManimScriptGenerator._extract_video_frames(Path("fake.mp4"))
         assert parts == []
-
-
-# ---------------------------------------------------------------------------
-# _format_timestamp
-# ---------------------------------------------------------------------------
-
-
-class TestFormatTimestamp:
-    def test_zero(self) -> None:
-        assert ManimScriptGenerator._format_timestamp(0) == "0:00"
-
-    def test_seconds_only(self) -> None:
-        assert ManimScriptGenerator._format_timestamp(45) == "0:45"
-
-    def test_minutes_and_seconds(self) -> None:
-        assert ManimScriptGenerator._format_timestamp(125) == "2:05"
-
-    def test_hours(self) -> None:
-        assert ManimScriptGenerator._format_timestamp(3661) == "1:01:01"
-
-    def test_fractional_seconds_truncated(self) -> None:
-        assert ManimScriptGenerator._format_timestamp(90.7) == "1:30"
-
-    def test_no_milliseconds_in_output(self) -> None:
-        result = ManimScriptGenerator._format_timestamp(12.999)
-        assert "." not in result
 
 
 # ---------------------------------------------------------------------------

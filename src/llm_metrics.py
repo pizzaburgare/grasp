@@ -113,6 +113,39 @@ class LLMUsage:
     cost_usd: float | None = None
 
 
+def accumulate_llm_usage(total: LLMUsage, usage: LLMUsage | None) -> None:
+    """Accumulate one usage record into a running total.
+
+    If either side has unknown cost, total cost becomes unknown.
+    """
+    if usage is None:
+        return
+
+    total.prompt_tokens += usage.prompt_tokens
+    total.completion_tokens += usage.completion_tokens
+    total.total_tokens += usage.total_tokens
+
+    if total.cost_usd is None or usage.cost_usd is None:
+        total.cost_usd = None
+    else:
+        total.cost_usd += usage.cost_usd
+
+
+def combine_llm_usage(usages: list[LLMUsage | None]) -> LLMUsage | None:
+    """Return combined usage for a list of usage records.
+
+    Returns None when no usage records are present.
+    """
+    present = [usage for usage in usages if usage is not None]
+    if not present:
+        return None
+
+    total = LLMUsage(cost_usd=0.0)
+    for usage in present:
+        accumulate_llm_usage(total, usage)
+    return total
+
+
 def _as_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
