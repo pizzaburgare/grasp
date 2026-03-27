@@ -26,20 +26,17 @@ import matplotlib.gridspec as gridspec  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np  # type: ignore
 from matplotlib.widgets import Button  # type: ignore
-from moviepy import VideoFileClip
 from PIL import Image
 
-from src.script_generator import ManimScriptGenerator, VideoReview
+from src.review.algorithms import extract_video_frames_parts, lightness_score, scan_settled_frames
+from src.review.algorithms.similarity import frame_ssim
+from src.review.models import VideoReview
+from src.script_generator import ManimScriptGenerator
 from src.utils import format_timestamp
 
 BG = "#0d0d0d"
 SSIM_GREEN_THRESHOLD = 90
 SSIM_YELLOW_THRESHOLD = 70
-LIGHTNESS_LUMA_BLACK_THRESHOLD = 16
-BRIGHTNESS_SCAN_INTERVAL = 1.0
-NON_BLACK_MAX_RATIO = 0.98
-BRIGHTNESS_DEDUP_SSIM_THRESHOLD = 0.50
-REVIEW_FRAME_QUALITY = 70
 
 
 # ---------------------------------------------------------------------------
@@ -49,132 +46,15 @@ REVIEW_FRAME_QUALITY = 70
 
 def _global_ssim(a: np.ndarray, b: np.ndarray) -> float:
     """Image-level SSIM on BT.601 grayscale. Returns value in [-1, 1]."""
-    c1 = (0.01 * 255) ** 2
-    c2 = (0.03 * 255) ** 2
-
-    def to_gray(x: np.ndarray) -> np.ndarray:
-        f = x.astype(np.float64)
-        return 0.299 * f[:, :, 0] + 0.587 * f[:, :, 1] + 0.114 * f[:, :, 2]
-
-    ga, gb = to_gray(a), to_gray(b)
-    mu_a, mu_b = ga.mean(), gb.mean()
-    var_a, var_b = ga.var(), gb.var()
-    cov = float(np.mean((ga - mu_a) * (gb - mu_b)))
-    num = (2 * mu_a * mu_b + c1) * (2 * cov + c2)
-    den = (mu_a**2 + mu_b**2 + c1) * (var_a + var_b + c2)
-    return float(np.clip(num / den, -1.0, 1.0))
-
-
-def _lightness_score(frame: np.ndarray) -> float:
-    """Return lightness score in [0, 1] as inverse black-pixel ratio."""
-    gray = (
-        0.299 * frame[:, :, 0].astype(np.float64)
-        + 0.587 * frame[:, :, 1].astype(np.float64)
-        + 0.114 * frame[:, :, 2].astype(np.float64)
-    )
-    black_ratio = float(np.mean(gray <= LIGHTNESS_LUMA_BLACK_THRESHOLD))
-    return 1.0 - black_ratio
-
-
-def _sample_every_second(video_path: Path) -> list[tuple[float, np.ndarray]]:
-    """Sample one frame every second, plus one at clip end."""
-    clip = VideoFileClip(str(video_path))
-    try:
-        duration = float(clip.duration or 0.0)
-        if duration <= 0:
-            return []
-
-        sampled: list[tuple[float, np.ndarray]] = []
-        t = 0.0
-        while t < duration:
-            sampled.append((t, clip.get_frame(t)))  # type: ignore[arg-type]
-            t += BRIGHTNESS_SCAN_INTERVAL
-
-        if not sampled or sampled[-1][0] < duration:
-            sampled.append((duration, clip.get_frame(duration)))  # type: ignore[arg-type]
-
-        return sampled
-    finally:
-        clip.close()
-
-
-def _select_brightness_peak_frames(video_path: Path) -> list[tuple[float, np.ndarray]]:
-    """Pick local lightness maxima and drop very similar darker duplicates."""
-    sampled = _sample_every_second(video_path)
-    if not sampled:
-        return []
-
-    lightness = [_lightness_score(frame) for _, frame in sampled]
-    black_ratios = [1.0 - score for score in lightness]
-
-    peaks: list[tuple[float, np.ndarray, float]] = []
-    for i in range(1, len(sampled) - 1):
-        if (
-            lightness[i] > lightness[i - 1]
-            and lightness[i] > lightness[i + 1]
-            and black_ratios[i] < NON_BLACK_MAX_RATIO
-        ):
-            ts, frame = sampled[i]
-            peaks.append((ts, frame, lightness[i]))
-
-    if not peaks:
-        for i, (ts, frame) in enumerate(sampled):
-            if black_ratios[i] < NON_BLACK_MAX_RATIO:
-                peaks.append((ts, frame, lightness[i]))
-    if not peaks:
-        return []
-
-    peaks.sort(key=lambda item: item[0])
-    ssim_deduped: list[tuple[float, np.ndarray, float]] = [peaks[0]]
-    for candidate in peaks[1:]:
-        prev = ssim_deduped[-1]
-        ssim = ManimScriptGenerator._frame_similarity(prev[1], candidate[1])
-        if ssim >= BRIGHTNESS_DEDUP_SSIM_THRESHOLD:
-            if candidate[2] > prev[2]:
-                ssim_deduped[-1] = candidate
-        else:
-            ssim_deduped.append(candidate)
-
-    ssim_deduped.sort(key=lambda item: item[2], reverse=True)
-    ssim_deduped = ssim_deduped[:50]
-    ssim_deduped.sort(key=lambda item: item[0])
-    return [(ts, frame) for ts, frame, _ in ssim_deduped]
-
-
-def _encode_selected_frames(
-    selected: list[tuple[float, np.ndarray]],
-) -> list[tuple[str, dict[str, Any]]]:
-    """Encode selected frames into the same image_url payload shape as production."""
-    parts: list[tuple[str, dict[str, Any]]] = []
-    for chosen_t, frame in selected:
-        img = Image.fromarray(frame)  # type: ignore[arg-type]
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=REVIEW_FRAME_QUALITY)
-        data = base64.b64encode(buf.getvalue()).decode()
-        label = f"Frame at {format_timestamp(chosen_t)}"
-        parts.append(
-            (
-                label,
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{data}"},
-                },
-            )
-        )
-    return parts
+    return frame_ssim(a, b)
 
 
 def _extract_frames_for_manual_review(
     video_path: Path,
     algorithm: str,
-) -> list[tuple[str, dict[str, Any]]]:
+) -> list[tuple[str, dict]]:
     """Extract frames for inspector modes while preserving production payload shape."""
-    if algorithm == "settled-ssim":
-        return ManimScriptGenerator._extract_video_frames(video_path, algorithm=algorithm)
-    if algorithm == "brightness-peaks":
-        selected = _select_brightness_peak_frames(video_path)
-        return _encode_selected_frames(selected)
-    raise ValueError(f"Unknown frame extraction algorithm: {algorithm}")
+    return extract_video_frames_parts(video_path, algorithm=algorithm)
 
 
 # ---------------------------------------------------------------------------
@@ -539,7 +419,7 @@ def main() -> None:
 
     if args.all_stills:
         print(f"Extracting ALL still frames from: {video_path}")
-        raw = ManimScriptGenerator._scan_settled_frames(video_path)
+        raw = scan_settled_frames(video_path)
         if not raw:
             print("No still frames found.")
             sys.exit(1)
@@ -563,7 +443,7 @@ def main() -> None:
         b64 = data_url.split(",", 1)[1]
         frame = np.array(Image.open(io.BytesIO(base64.b64decode(b64))))
         decoded_frames.append((label, frame))
-        lightness_scores.append(_lightness_score(frame))
+        lightness_scores.append(lightness_score(frame))
 
     print(f"{len(decoded_frames)} unique frames extracted.")
 
