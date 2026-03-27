@@ -2,9 +2,9 @@
 """
 Manual inspection tool for the video review step.
 
-Uses ManimScriptGenerator._extract_video_frames - the exact same function
-called by the review agent - so what you see here is pixel-for-pixel what
-the LLM receives (JPEG-compressed at the production quality setting).
+Uses the same settled-ssim extraction path as production review. The
+brightness-peaks mode is implemented here for manual inspection only,
+while keeping JPEG encoding compatible with the review payload format.
 
 Navigate with ← / → arrow keys or the Prev / Next buttons.
 
@@ -28,7 +28,10 @@ import numpy as np  # type: ignore
 from matplotlib.widgets import Button  # type: ignore
 from PIL import Image
 
-from src.script_generator import ManimScriptGenerator, VideoReview
+from src.review.algorithms import extract_video_frames_parts, lightness_score, scan_settled_frames
+from src.review.algorithms.similarity import frame_ssim
+from src.review.models import VideoReview
+from src.script_generator import ManimScriptGenerator
 from src.utils import format_timestamp
 
 BG = "#0d0d0d"
@@ -43,20 +46,15 @@ SSIM_YELLOW_THRESHOLD = 70
 
 def _global_ssim(a: np.ndarray, b: np.ndarray) -> float:
     """Image-level SSIM on BT.601 grayscale. Returns value in [-1, 1]."""
-    c1 = (0.01 * 255) ** 2
-    c2 = (0.03 * 255) ** 2
+    return frame_ssim(a, b)
 
-    def to_gray(x: np.ndarray) -> np.ndarray:
-        f = x.astype(np.float64)
-        return 0.299 * f[:, :, 0] + 0.587 * f[:, :, 1] + 0.114 * f[:, :, 2]
 
-    ga, gb = to_gray(a), to_gray(b)
-    mu_a, mu_b = ga.mean(), gb.mean()
-    var_a, var_b = ga.var(), gb.var()
-    cov = float(np.mean((ga - mu_a) * (gb - mu_b)))
-    num = (2 * mu_a * mu_b + c1) * (2 * cov + c2)
-    den = (mu_a**2 + mu_b**2 + c1) * (var_a + var_b + c2)
-    return float(np.clip(num / den, -1.0, 1.0))
+def _extract_frames_for_manual_review(
+    video_path: Path,
+    algorithm: str,
+) -> list[tuple[str, dict]]:
+    """Extract frames for inspector modes while preserving production payload shape."""
+    return extract_video_frames_parts(video_path, algorithm=algorithm)
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +110,11 @@ class FrameViewer:
         self,
         frames: list[tuple[str, np.ndarray]],
         reviews: list[VideoReview | None] | None = None,
+        lightness_scores: list[float] | None = None,
     ) -> None:
         self.frames = frames
         self.reviews = reviews
+        self.lightness_scores = lightness_scores
         self.n = len(frames)
         self.idx = 0
 
@@ -267,7 +267,7 @@ class FrameViewer:
     # Rendering
     # ------------------------------------------------------------------
 
-    def _render(self) -> None:
+    def _render(self) -> None:  # noqa: PLR0912
         label_curr, frame_curr = self.frames[self.idx]
 
         # Current frame
@@ -280,6 +280,19 @@ class FrameViewer:
             fontfamily="monospace",
             pad=6,
         )
+        if self.lightness_scores is not None:
+            curr_lightness = self.lightness_scores[self.idx] * 100
+            self.ax_curr.text(
+                0.5,
+                -0.06,
+                f"Lightness: {curr_lightness:5.1f}%",
+                transform=self.ax_curr.transAxes,
+                ha="center",
+                va="top",
+                color="#a6e3a1",
+                fontsize=10,
+                fontfamily="monospace",
+            )
         self.ax_curr.axis("off")
 
         # Previous frame (or placeholder)
@@ -296,6 +309,19 @@ class FrameViewer:
                 fontfamily="monospace",
                 pad=6,
             )
+            if self.lightness_scores is not None:
+                prev_lightness = self.lightness_scores[self.idx - 1] * 100
+                self.ax_prev.text(
+                    0.5,
+                    -0.06,
+                    f"Lightness: {prev_lightness:5.1f}%",
+                    transform=self.ax_prev.transAxes,
+                    ha="center",
+                    va="top",
+                    color="#585b70",
+                    fontsize=10,
+                    fontfamily="monospace",
+                )
         else:
             self.ax_prev.text(
                 0.5,
@@ -375,6 +401,15 @@ def main() -> None:
         default="unknown",
         help="Topic string passed to the review prompt (default: 'unknown').",
     )
+    parser.add_argument(
+        "--algorithm",
+        choices=["settled-ssim", "brightness-peaks"],
+        default="settled-ssim",
+        help=(
+            "Frame extraction algorithm: 'settled-ssim' (default production flow) "
+            "or 'brightness-peaks' (1-second samples, keep local lightness maxima)."
+        ),
+    )
     args = parser.parse_args()
 
     video_path: Path = args.video
@@ -384,7 +419,7 @@ def main() -> None:
 
     if args.all_stills:
         print(f"Extracting ALL still frames from: {video_path}")
-        raw = ManimScriptGenerator._scan_settled_frames(video_path)
+        raw = scan_settled_frames(video_path)
         if not raw:
             print("No still frames found.")
             sys.exit(1)
@@ -394,20 +429,23 @@ def main() -> None:
         return
 
     print(f"Extracting frames from: {video_path}")
-    raw_parts = ManimScriptGenerator._extract_video_frames(video_path)
+    print(f"Using extraction algorithm: {args.algorithm}")
+    raw_parts = _extract_frames_for_manual_review(video_path, algorithm=args.algorithm)
     if not raw_parts:
         print("No frames could be extracted.")
         sys.exit(1)
 
     # Decode JPEG bytes to numpy for display
-    frames: list[tuple[str, np.ndarray]] = []
+    decoded_frames: list[tuple[str, np.ndarray]] = []
+    lightness_scores: list[float] = []
     for label, img_part in raw_parts:
         data_url: str = img_part["image_url"]["url"]
         b64 = data_url.split(",", 1)[1]
         frame = np.array(Image.open(io.BytesIO(base64.b64decode(b64))))
-        frames.append((label, frame))
+        decoded_frames.append((label, frame))
+        lightness_scores.append(lightness_score(frame))
 
-    print(f"{len(frames)} unique frames extracted.")
+    print(f"{len(decoded_frames)} unique frames extracted.")
 
     reviews: list[VideoReview | None] | None = None
     if args.review:
@@ -416,7 +454,7 @@ def main() -> None:
         flagged = sum(1 for r in reviews if r is not None and r.has_issues)
         print(f"Review complete: {flagged}/{len(reviews)} frames flagged.")
 
-    FrameViewer(frames, reviews=reviews)
+    FrameViewer(decoded_frames, reviews=reviews, lightness_scores=lightness_scores)
 
 
 if __name__ == "__main__":

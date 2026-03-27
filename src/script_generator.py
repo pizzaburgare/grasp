@@ -3,125 +3,23 @@ Script Generator for Manim Educational Videos
 Uses OpenRouter to generate Manim code from lesson plans
 """
 
-import base64
-import io
 import re
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
-from moviepy import VideoFileClip
-from PIL import Image
-from pydantic import BaseModel, Field
 
 from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
 from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
+from src.review.algorithms import (
+    extract_video_frames_parts,
+)
+from src.review.models import CodeFix, VideoReview
 from src.search_replace import flexible_search_and_replace
 from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
-from src.utils import format_timestamp
 
 load_dotenv()
-
-# Target number of video frames sent for review
-_REVIEW_TARGET_FRAMES = 50
-_REVIEW_FRAME_QUALITY = 70
-# Dense scan settings for scene-change detection
-_SCENE_SCAN_INTERVAL = 0.5  # seconds between scan samples
-_SCENE_SETTLE_THRESHOLD = 0.01  # max mean absolute pixel difference to count as "settled"
-_MIN_CLIP_DURATION = 2.0
-_HIGH_SSIM_THRESHOLD = 0.99
-
-
-# ---------------------------------------------------------------------------
-# Image similarity
-# ---------------------------------------------------------------------------
-
-
-def _frame_ssim(a: np.ndarray, b: np.ndarray) -> float:
-    """Compute global SSIM on BT.601 luma.  Returns a value in [-1, 1]."""
-    c1 = (0.01 * 255) ** 2
-    c2 = (0.03 * 255) ** 2
-    ga = np.dot(a[..., :3].astype(np.float64), [0.299, 0.587, 0.114])
-    gb = np.dot(b[..., :3].astype(np.float64), [0.299, 0.587, 0.114])
-    mu_a, mu_b = ga.mean(), gb.mean()
-    var_a, var_b = ga.var(), gb.var()
-    cov = float(np.mean((ga - mu_a) * (gb - mu_b)))
-    num = (2 * mu_a * mu_b + c1) * (2 * cov + c2)
-    den = (mu_a**2 + mu_b**2 + c1) * (var_a + var_b + c2)
-    return float(np.clip(num / den, -1.0, 1.0))
-
-
-# ---------------------------------------------------------------------------
-# Structured output models
-# ---------------------------------------------------------------------------
-
-
-class VideoReview(BaseModel):
-    """Structured result from the video review agent."""
-
-    text_clipped: bool = Field(
-        description="Text or equations are clipped / cut off at the frame edges."
-    )
-    overlapping_content: bool = Field(
-        description="Content overlaps or is rendered unreadably on top of other content."
-    )
-    broken_animations: bool = Field(
-        description="Visual artifacts, glitches, or misplaced objects are visible."
-    )
-    content_overflow: bool = Field(
-        description="Content extends outside the visible frame boundary."
-    )
-    latex_rendering: bool = Field(
-        description=(
-            "LaTeX is incorrectly rendered (broken symbols, blank boxes, malformed equations)."
-        )
-    )
-    notes: str | None = Field(
-        default=None,
-        description=(
-            "Optional 4-8 word description of the problem(s) found. "
-            "Only set when at least one criterion is true."
-        ),
-    )
-
-    @property
-    def has_issues(self) -> bool:
-        return any(
-            [
-                self.text_clipped,
-                self.overlapping_content,
-                self.broken_animations,
-                self.content_overflow,
-                self.latex_rendering,
-            ]
-        )
-
-    def failed_criteria(self) -> list[str]:
-        labels = {
-            "text_clipped": "Text or equations clipped / cut off at the edges",
-            "overlapping_content": "Overlapping or unreadable content",
-            "broken_animations": "Broken or glitchy animations (artifacts, misplaced objects)",
-            "content_overflow": "Content overflowing outside the visible frame",
-            "latex_rendering": "Incorrect rendering of LaTeX",
-        }
-        return [desc for field, desc in labels.items() if getattr(self, field)]
-
-
-class CodeEdit(BaseModel):
-    """A single search/replace edit to apply to the script."""
-
-    old_code: str = Field(
-        description="Verbatim substring to find in the source (include 5+ lines of context)."
-    )
-    new_code: str = Field(description="Replacement text.")
-
-
-class CodeFix(BaseModel):
-    """Structured list of targeted edits from the fix agent."""
-
-    edits: list[CodeEdit] = Field(description="Ordered list of search/replace edits to apply.")
 
 
 class ManimScriptGenerator:
@@ -235,120 +133,6 @@ Generate a complete Manim script that:
     # Iteration helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
-        """Backward-compatible wrapper for frame similarity comparisons."""
-        return _frame_ssim(a, b)
-
-    @staticmethod
-    def _scan_settled_frames(
-        video_path: Path,
-    ) -> list[tuple[float, np.ndarray]]:
-        """Scan a video and return all settled, non-blank frames with ≥ 1 s gap.
-
-        A frame at time *T* is "settled" when its mean absolute pixel
-        difference from the frame at *T + _SCENE_SCAN_INTERVAL* is below
-        ``_SCENE_SETTLE_THRESHOLD``.  This tolerates tiny codec rounding
-        artifacts that prevent perfect pixel equality.
-
-        Near-uniform frames (std < 2) are skipped, and a minimum 1 s gap
-        between kept frames is enforced.
-
-        Returns a list of ``(timestamp, frame_array)`` tuples.  The caller
-        owns the numpy arrays (they are copies, not views into the clip).
-        """
-        clip = VideoFileClip(str(video_path))
-        try:
-            duration = float(clip.duration or 0.0)
-            if duration <= 0:
-                return []
-
-            candidates: list[tuple[float, np.ndarray]] = []
-            last_kept_t = -float("inf")
-
-            t = 0.0
-            curr_frame: np.ndarray = clip.get_frame(0.0)  # type: ignore[assignment]
-            while t < duration:
-                next_t = min(t + _SCENE_SCAN_INTERVAL, duration)
-                next_frame: np.ndarray = clip.get_frame(next_t)  # type: ignore[assignment]
-
-                mae = float(
-                    np.mean(np.abs(curr_frame.astype(np.int16) - next_frame.astype(np.int16)))
-                )
-                not_blank = float(np.std(curr_frame)) >= _MIN_CLIP_DURATION
-                if mae <= _SCENE_SETTLE_THRESHOLD and t - last_kept_t >= 1.0 and not_blank:
-                    candidates.append((t, curr_frame.copy()))
-                    last_kept_t = t
-
-                curr_frame = next_frame
-                t = next_t
-
-            return candidates
-        finally:
-            clip.close()
-
-    @staticmethod
-    def _extract_video_frames(
-        video_path: Path,
-    ) -> list[tuple[str, dict[str, Any]]]:
-        """Sample frames from a video, preferring moments after animations settle.
-
-        Returns a list of ``(timestamp_label, image_url_part)`` tuples, targeting
-        up to ``_REVIEW_TARGET_FRAMES`` frames.
-
-        Algorithm:
-        1. ``_scan_settled_frames`` collects all settled, non-blank frames
-           with ≥ 1 s gap (single sequential scan, MAE-based settle check).
-        2. SSIM-dedup the full candidate set (threshold 0.99): walk sequentially,
-           skip any frame with SSIM ≥ 0.99 vs. the previous kept frame.
-        3. Evenly subsample to at most ``_REVIEW_TARGET_FRAMES``.
-        4. JPEG-encode the final frames.
-        """
-        candidates = ManimScriptGenerator._scan_settled_frames(video_path)
-        if not candidates:
-            return []
-
-        # ----------------------------------------------------------
-        # SSIM dedup (sequential, 0.99 threshold)
-        # ----------------------------------------------------------
-        deduped: list[tuple[float, np.ndarray]] = [candidates[0]]
-        for ts, frame in candidates[1:]:
-            if ManimScriptGenerator._frame_similarity(deduped[-1][1], frame) < _HIGH_SSIM_THRESHOLD:
-                deduped.append((ts, frame))
-
-        # ----------------------------------------------------------
-        # Evenly subsample to target
-        # ----------------------------------------------------------
-        if len(deduped) > _REVIEW_TARGET_FRAMES:
-            step = len(deduped) / _REVIEW_TARGET_FRAMES
-            indices = list(
-                dict.fromkeys(
-                    min(round(i * step), len(deduped) - 1) for i in range(_REVIEW_TARGET_FRAMES)
-                )
-            )
-            deduped = [deduped[i] for i in indices]
-
-        # ----------------------------------------------------------
-        # JPEG-encode the final frames
-        # ----------------------------------------------------------
-        parts: list[tuple[str, dict[str, Any]]] = []
-        for chosen_t, frame in deduped:
-            img = Image.fromarray(frame)  # type: ignore[arg-type]
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=_REVIEW_FRAME_QUALITY)
-            data = base64.b64encode(buf.getvalue()).decode()
-            label = f"Frame at {format_timestamp(chosen_t)}"
-            parts.append(
-                (
-                    label,
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{data}"},
-                    },
-                )
-            )
-        return parts
-
     def review_video(
         self,
         script: str,
@@ -365,7 +149,7 @@ Generate a complete Manim script that:
         passed review; otherwise *script* contains the corrected code.
         """
         print("Reviewing rendered video for visual issues ...")
-        frames = self._extract_video_frames(video_path)
+        frames = extract_video_frames_parts(video_path, algorithm="brightness-peaks")
         if not frames:
             print("  Could not extract frames - skipping review.")
             return script, False, LLMUsage()
