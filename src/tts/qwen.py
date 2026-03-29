@@ -73,7 +73,7 @@ class QwenTTSEngine(TTSEngine):
         return "cpu"
 
     @staticmethod
-    def _dtype() -> torch.dtype:
+    def _dtype() -> "torch.dtype":
         import torch
 
         if torch.cuda.is_available():
@@ -127,7 +127,7 @@ class QwenTTSEngine(TTSEngine):
         return audio, sr
 
     @staticmethod
-    def _to_numpy_mono(wav: np.ndarray | torch.Tensor) -> np.ndarray:
+    def _to_numpy_mono(wav: "np.ndarray | torch.Tensor") -> np.ndarray:
         """Convert a single waveform to float32 mono numpy array."""
         if hasattr(wav, "detach"):
             wav = wav.detach().cpu().numpy()  # type: ignore[union-attr]
