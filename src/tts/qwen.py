@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import os
 from pathlib import Path
@@ -159,9 +157,7 @@ class QwenTTSEngine(TTSEngine):
                 )
             elif model_type == "base":
                 if not self.ref_audio:
-                    raise ValueError(
-                        "The Qwen base model requires a reference audio."
-                    )
+                    raise ValueError("The Qwen base model requires a reference audio.")
                 wavs, sr = model.generate_voice_clone(
                     text=texts,
                     language=[self.language] * n,
