@@ -107,7 +107,13 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
     if cache_dir is not None:
         cached_wav = cache_dir / f"{cache_key}.wav"
         if cached_wav.exists():
-            shutil.copy2(cached_wav, out_path)
+            # Hard-link to avoid copying bytes; fall back to copy if cross-device.
+            if out_path.exists():
+                out_path.unlink()
+            try:
+                os.link(cached_wav, out_path)
+            except OSError:
+                shutil.copy2(cached_wav, out_path)
             with wave.open(str(out_path), "rb") as wf:
                 return (wf.getnframes() / wf.getframerate()) + AUDIO_DURATION_BUFFER_SECONDS
 
@@ -140,7 +146,10 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
         wav_file.writeframes(audio_int16.tobytes())
 
     if cached_wav is not None:
-        shutil.copy2(out_path, cached_wav)
+        try:
+            os.link(out_path, cached_wav)
+        except OSError:
+            shutil.copy2(out_path, cached_wav)
 
     return (len(audio_int16) / sr) + AUDIO_DURATION_BUFFER_SECONDS
 
