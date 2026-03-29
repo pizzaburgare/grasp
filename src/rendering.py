@@ -78,13 +78,15 @@ def _presynthesise_audio(
     channels = 1
     sample_width = 2  # 16-bit
 
-    for i, (text, _key, cached_path) in enumerate(missing, 1):
-        t0 = time.perf_counter()
-        audio, sr = engine.synthesize(text)
-        elapsed = time.perf_counter() - t0
+    # Use batch synthesis when the engine supports it natively.
+    missing_texts = [text for text, _key, _path in missing]
+    results = engine.synthesize_batch(missing_texts)
 
+    audio_cache_dir.mkdir(parents=True, exist_ok=True)
+    for i, ((_text, _key, cached_path), (audio, sr)) in enumerate(
+        zip(missing, results, strict=True), 1
+    ):
         audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
-        audio_cache_dir.mkdir(parents=True, exist_ok=True)
         with wave.open(str(cached_path), "wb") as wf:
             wf.setnchannels(channels)
             wf.setsampwidth(sample_width)
@@ -92,7 +94,7 @@ def _presynthesise_audio(
             wf.writeframes(audio_int16.tobytes())
 
         dur = len(audio_int16) / sr
-        print(f"  [{i}/{len(missing)}] {elapsed:.1f}s -> {dur:.1f}s audio")
+        print(f"  [{i}/{len(missing)}] {dur:.1f}s audio")
 
     return len(missing)
 

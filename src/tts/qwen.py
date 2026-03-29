@@ -117,3 +117,53 @@ class QwenTTSEngine(TTSEngine):
         if audio.ndim == _MIN_AUDIO_CHANNELS:
             audio = audio[0]
         return audio, sr
+
+    @staticmethod
+    def _to_numpy_mono(wav: "np.ndarray | torch.Tensor") -> np.ndarray:
+        """Convert a single waveform to float32 mono numpy array."""
+        if hasattr(wav, "detach"):
+            wav = wav.detach().cpu().numpy()  # type: ignore[union-attr]
+        arr = np.asarray(wav, dtype=np.float32)
+        if arr.ndim == _MIN_AUDIO_CHANNELS:
+            arr = arr[0]
+        return arr
+
+    def synthesize_batch(self, texts: list[str]) -> list[tuple[np.ndarray, int]]:
+        """Synthesize multiple texts using native batch support."""
+        if not texts:
+            return []
+
+        model = self._load_model()
+        model_type = model.model.tts_model_type
+        n = len(texts)
+
+        with torch.inference_mode():
+            if model_type == "custom_voice":
+                wavs, sr = model.generate_custom_voice(
+                    text=texts,
+                    language=[self.language] * n,
+                    speaker=[self.speaker] * n,
+                    temperature=0.7,
+                )
+            elif model_type == "base":
+                if not self.ref_audio:
+                    raise ValueError(
+                        "The Qwen base model requires a reference audio."
+                    )
+                wavs, sr = model.generate_voice_clone(
+                    text=texts,
+                    language=[self.language] * n,
+                    ref_audio=[self.ref_audio] * n,
+                    ref_text=[self.ref_text or None] * n,
+                    x_vector_only_mode=[not bool(self.ref_text)] * n,
+                )
+            elif model_type == "voice_design":
+                wavs, sr = model.generate_voice_design(
+                    text=texts,
+                    instruct=[self.speaker] * n,
+                    language=[self.language] * n,
+                )
+            else:
+                raise ValueError(f"Unsupported Qwen TTS model type: {model_type!r}")
+
+        return [(self._to_numpy_mono(wav), sr) for wav in wavs]

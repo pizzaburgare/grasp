@@ -19,3 +19,10 @@ class TTSEngine(ABC):
             (audio_float32_mono, sample_rate)
         """
         ...
+
+    def synthesize_batch(self, texts: list[str]) -> list[tuple[np.ndarray, int]]:
+        """Synthesize multiple texts. Default falls back to sequential calls.
+
+        Engines that support native batching should override this.
+        """
+        return [self.synthesize(t) for t in texts]
