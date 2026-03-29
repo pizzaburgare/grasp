@@ -80,7 +80,7 @@ def _presynthesise_audio(
 
     # Use batch synthesis when the engine supports it natively.
     # Process in chunks to avoid GPU OOM on large scripts.
-    batch_size = int(os.environ.get("TTS_BATCH_SIZE", "4"))
+    batch_size = int(os.environ.get("TTS_BATCH_SIZE", "8"))
     missing_texts = [text for text, _key, _path in missing]
     results: list[tuple[np.ndarray, int]] = []
     for chunk_start in range(0, len(missing_texts), batch_size):
