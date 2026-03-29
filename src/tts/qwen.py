@@ -80,34 +80,35 @@ class QwenTTSEngine(TTSEngine):
         model = self._load_model()
         model_type = model.model.tts_model_type
 
-        if model_type == "custom_voice":
-            wavs, sr = model.generate_custom_voice(
-                text=text,
-                language=self.language,
-                speaker=self.speaker,
-                temperature=0.7,
-            )
-        elif model_type == "base":
-            if not self.ref_audio:
-                raise ValueError(
-                    "The Qwen base model requires a reference audio for voice cloning. "
-                    "Set QWEN_TTS_REF_AUDIO to a .wav file path."
+        with torch.inference_mode():
+            if model_type == "custom_voice":
+                wavs, sr = model.generate_custom_voice(
+                    text=text,
+                    language=self.language,
+                    speaker=self.speaker,
+                    temperature=0.7,
                 )
-            wavs, sr = model.generate_voice_clone(
-                text=text,
-                language=self.language,
-                ref_audio=self.ref_audio,
-                ref_text=self.ref_text or None,
-                x_vector_only_mode=not bool(self.ref_text),
-            )
-        elif model_type == "voice_design":
-            wavs, sr = model.generate_voice_design(
-                text=text,
-                instruct=self.speaker,
-                language=self.language,
-            )
-        else:
-            raise ValueError(f"Unsupported Qwen TTS model type: {model_type!r}")
+            elif model_type == "base":
+                if not self.ref_audio:
+                    raise ValueError(
+                        "The Qwen base model requires a reference audio for voice cloning. "
+                        "Set QWEN_TTS_REF_AUDIO to a .wav file path."
+                    )
+                wavs, sr = model.generate_voice_clone(
+                    text=text,
+                    language=self.language,
+                    ref_audio=self.ref_audio,
+                    ref_text=self.ref_text or None,
+                    x_vector_only_mode=not bool(self.ref_text),
+                )
+            elif model_type == "voice_design":
+                wavs, sr = model.generate_voice_design(
+                    text=text,
+                    instruct=self.speaker,
+                    language=self.language,
+                )
+            else:
+                raise ValueError(f"Unsupported Qwen TTS model type: {model_type!r}")
 
         audio = wavs[0]
         if hasattr(audio, "detach"):  # torch.Tensor → numpy
