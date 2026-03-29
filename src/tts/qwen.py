@@ -1,12 +1,16 @@
+from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import torch
 
 from .base import TTSEngine
+
+if TYPE_CHECKING:
+    import torch
 
 # Default reference audio bundled alongside this file (used for voice cloning
 # when QWEN_TTS_REF_AUDIO is not set and the model type is 'base').
@@ -40,7 +44,7 @@ class QwenTTSEngine(TTSEngine):
         self._model = None
 
     @classmethod
-    def from_env(cls) -> "QwenTTSEngine":
+    def from_env(cls) -> QwenTTSEngine:
         return cls(
             model_id=os.environ.get("QWEN_TTS_MODEL", _DEFAULT_MODEL),
             speaker=os.environ.get("QWEN_TTS_SPEAKER", "Ryan"),
@@ -62,6 +66,8 @@ class QwenTTSEngine(TTSEngine):
 
     @staticmethod
     def _device_map() -> str:
+        import torch
+
         if torch.cuda.is_available():
             return "cuda:0"
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -70,6 +76,8 @@ class QwenTTSEngine(TTSEngine):
 
     @staticmethod
     def _dtype() -> torch.dtype:
+        import torch
+
         if torch.cuda.is_available():
             return torch.bfloat16
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -77,6 +85,8 @@ class QwenTTSEngine(TTSEngine):
         return torch.float32
 
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
+        import torch
+
         model = self._load_model()
         model_type = model.model.tts_model_type
 
@@ -119,7 +129,7 @@ class QwenTTSEngine(TTSEngine):
         return audio, sr
 
     @staticmethod
-    def _to_numpy_mono(wav: "np.ndarray | torch.Tensor") -> np.ndarray:
+    def _to_numpy_mono(wav: np.ndarray | torch.Tensor) -> np.ndarray:
         """Convert a single waveform to float32 mono numpy array."""
         if hasattr(wav, "detach"):
             wav = wav.detach().cpu().numpy()  # type: ignore[union-attr]
@@ -130,6 +140,8 @@ class QwenTTSEngine(TTSEngine):
 
     def synthesize_batch(self, texts: list[str]) -> list[tuple[np.ndarray, int]]:
         """Synthesize multiple texts using native batch support."""
+        import torch
+
         if not texts:
             return []
 
