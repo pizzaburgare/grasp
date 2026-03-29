@@ -42,7 +42,7 @@ class QwenTTSEngine(TTSEngine):
         self._model = None
 
     @classmethod
-    def from_env(cls) -> QwenTTSEngine:
+    def from_env(cls) -> "QwenTTSEngine":
         return cls(
             model_id=os.environ.get("QWEN_TTS_MODEL", _DEFAULT_MODEL),
             speaker=os.environ.get("QWEN_TTS_SPEAKER", "Ryan"),
