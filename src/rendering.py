@@ -79,8 +79,13 @@ def _presynthesise_audio(
     sample_width = 2  # 16-bit
 
     # Use batch synthesis when the engine supports it natively.
+    # Process in chunks to avoid GPU OOM on large scripts.
+    batch_size = int(os.environ.get("TTS_BATCH_SIZE", "4"))
     missing_texts = [text for text, _key, _path in missing]
-    results = engine.synthesize_batch(missing_texts)
+    results: list[tuple[np.ndarray, int]] = []
+    for chunk_start in range(0, len(missing_texts), batch_size):
+        chunk = missing_texts[chunk_start : chunk_start + batch_size]
+        results.extend(engine.synthesize_batch(chunk))
 
     audio_cache_dir.mkdir(parents=True, exist_ok=True)
     for i, ((_text, _key, cached_path), (audio, sr)) in enumerate(
