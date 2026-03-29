@@ -3,13 +3,98 @@ import logging
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
-from src.cache import get_audio_cache_dir, get_lesson_cache_dir, save_video_to_cache
+from src.cache import get_audio_cache_dir, get_lesson_cache_dir, hash_text, save_video_to_cache
 from src.command_runner import run_command
 from src.paths import CACHE_AUDIO_DIR, CACHE_MANIM_DIR
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Audio pre-synthesis helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_say_texts(script_path: Path) -> list[str]:
+    """Extract all string arguments from ``audio_manager.say(...)`` calls via AST.
+
+    Supports plain string literals and implicit string concatenation.  Returns
+    them in source order so the cache can be pre-warmed before Manim renders.
+    """
+    tree = ast.parse(script_path.read_text())
+    texts: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        # Match *.say(...)
+        if isinstance(func, ast.Attribute) and func.attr == "say" and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                texts.append(arg.value)
+            elif isinstance(arg, ast.JoinedStr):
+                pass  # f-strings can't be pre-synthesized
+    return texts
+
+
+def _presynthesise_audio(
+    texts: list[str],
+    audio_cache_dir: Path,
+    env: dict[str, str],
+) -> int:
+    """Synthesise all *texts* into *audio_cache_dir* using the TTS engine.
+
+    Only texts whose cache file is missing are synthesised.  Returns the number
+    of texts that required synthesis (cache misses).
+    """
+    from src.audiomanager import _engine_cache_salt
+    from src.tts import get_default_engine
+
+    engine = get_default_engine()
+    salt = _engine_cache_salt(engine)
+
+    # Determine which texts are missing from cache
+    missing: list[tuple[str, str, Path]] = []
+    for text in texts:
+        key = hash_text(text, salt=salt)
+        cached_path = audio_cache_dir / f"{key}.wav"
+        if not cached_path.exists():
+            missing.append((text, key, cached_path))
+
+    if not missing:
+        print(f"Audio pre-synthesis: all {len(texts)} clips cached, skipping")
+        return 0
+
+    print(f"Audio pre-synthesis: {len(missing)}/{len(texts)} clips need synthesis")
+
+    import wave
+
+    import numpy as np
+
+    channels = 1
+    sample_width = 2  # 16-bit
+
+    for i, (text, _key, cached_path) in enumerate(missing, 1):
+        t0 = time.perf_counter()
+        audio, sr = engine.synthesize(text)
+        elapsed = time.perf_counter() - t0
+
+        audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
+        audio_cache_dir.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(cached_path), "wb") as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(sample_width)
+            wf.setframerate(sr)
+            wf.writeframes(audio_int16.tobytes())
+
+        dur = len(audio_int16) / sr
+        print(f"  [{i}/{len(missing)}] {elapsed:.1f}s -> {dur:.1f}s audio")
+
+    return len(missing)
 
 
 def detect_scene_class(script_path: Path) -> str:
@@ -93,6 +178,13 @@ def render_and_merge(
     audio_cache_dir.mkdir(parents=True, exist_ok=True)
     audio_work_dir.mkdir(parents=True, exist_ok=True)
     cache_manim.mkdir(parents=True, exist_ok=True)
+
+    # Pre-synthesise all audio so the Manim subprocess only hits cache.
+    say_texts = _extract_say_texts(script_path)
+    if say_texts:
+        t0 = time.perf_counter()
+        _presynthesise_audio(say_texts, audio_cache_dir, env)
+        print(f"Audio pre-synthesis total: {time.perf_counter() - t0:.1f}s")
 
     result = run_command(
         command=[
