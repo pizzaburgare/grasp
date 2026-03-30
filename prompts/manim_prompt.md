@@ -103,7 +103,7 @@ class ArgMinExample(Scene):
         def func(x):
             return 2 * (x - 5) ** 2
 
-        graph = ax.plot(func, color=MAROON)
+        graph = ax.plot(func)
 
         audio_manager.say(
             "Consider this graceful parabola. We can imagine it representing a cost or an error curve that we eagerly wish to minimize."
@@ -118,7 +118,7 @@ class ArgMinExample(Scene):
         t = ValueTracker(0)
 
         initial_point = ax.c2p(t.get_value(), func(t.get_value()))
-        dot = Dot(point=initial_point, color=YELLOW).scale(1.2)
+        dot = Dot(point=initial_point).scale(1.2)
 
         dot.add_updater(lambda x: x.move_to(ax.c2p(t.get_value(), func(t.get_value()))))
 
@@ -152,8 +152,7 @@ class ArgMinExample(Scene):
         # ==========================================================
         highlight_line = DashedLine(
             start=ax.c2p(target_x, func(target_x) + 20),
-            end=ax.c2p(target_x, 0),
-            color=GREEN
+            end=ax.c2p(target_x, 0)
         )
         argmin_text = MathTex(r"\arg\min_{x} f(x) = 5").scale(0.8)
         argmin_text.next_to(highlight_line, UP, buff=0.2)
@@ -210,7 +209,7 @@ class SineCurveUnitCircle(Scene):
         audio_manager.done_say()
 
         # Create Circle
-        circle = Circle(radius=1, color=WHITE)
+        circle = Circle(radius=1)
         circle.move_to(origin_point)
 
         title = Title("Generating the Sine Wave").scale(0.8)
@@ -224,12 +223,12 @@ class SineCurveUnitCircle(Scene):
         # ==========================================================
         # Section 2: The Moving Elements
         # ==========================================================
-        dot = Dot(radius=0.1, color=YELLOW)
+        dot = Dot(radius=0.1)
         dot.move_to(circle.point_from_proportion(0))
 
         # Lines
         radius_line = always_redraw(
-            lambda: Line(origin_point, dot.get_center(), color=BLUE, stroke_width=2)
+            lambda: Line(origin_point, dot.get_center(), stroke_width=2)
         )
 
         # We need to track time for the curve generation
@@ -240,7 +239,6 @@ class SineCurveUnitCircle(Scene):
             lambda: Line(
                 dot.get_center(),
                 np.array([curve_start[0] + t_tracker.get_value() * 4, dot.get_center()[1], 0]),
-                color=YELLOW_A,
                 stroke_width=2,
                 include_tip=True
             )
@@ -250,7 +248,6 @@ class SineCurveUnitCircle(Scene):
         # We use a TracedPath for efficiency and smoothness
         trace = TracedPath(
             lambda: np.array([curve_start[0] + t_tracker.get_value() * 4, dot.get_center()[1], 0]),
-            stroke_color=YELLOW,
             stroke_width=3,
         )
 
@@ -344,7 +341,7 @@ class MovingFrameBox(Scene):
         # ==========================================================
         # Section 2: The First Term
         # ==========================================================
-        framebox1 = SurroundingRectangle(equation[1], buff=0.1, color=YELLOW)
+        framebox1 = SurroundingRectangle(equation[1], buff=0.1)
 
         audio_manager.say(
             "The formula has two parts. First, we hold the first function constant, and multiply it by the derivative of the second."
@@ -355,7 +352,7 @@ class MovingFrameBox(Scene):
         # ==========================================================
         # Section 3: The Second Term
         # ==========================================================
-        framebox2 = SurroundingRectangle(equation[3], buff=0.1, color=YELLOW)
+        framebox2 = SurroundingRectangle(equation[3], buff=0.1)
 
         audio_manager.say(
             "Then, we add the symmetric counterpart: we hold the second function constant, and multiply it by the derivative of the first."
