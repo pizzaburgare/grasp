@@ -311,6 +311,12 @@ prompts/               # LLM system prompts for each pipeline stage
 models/                # Local TTS model weights (Piper)
 ```
 
+
+## Acknowledgments
+
+* Audio for cloning from [*Hypatia* by Charles Kingsley](https://librivox.org/), provided by [LibriVox](https://librivox.org/) (Public Domain).
+
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
