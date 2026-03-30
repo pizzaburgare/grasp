@@ -235,30 +235,53 @@ uv run pip install flash-attn --no-build-isolation
 
 ## Pipeline Overview
 
+The runtime pipeline is orchestrated in `src/workflow.py` and follows this order:
+
+1. **Input preprocessing + document selection (optional)**
+  - If `--input-dir` points to a course folder, the pipeline expects `raw/` and `processed/` subfolders.
+  - `batch_process` normalizes raw files into text-ready documents in `processed/`.
+  - `DocumentSelectorAgent` picks the most relevant files for the requested topic.
+2. **Lesson planning**
+  - `Math Lesson Planner` (`LESSON_PLANNER_MODEL`) generates a structured lesson plan from topic + selected content.
+3. **Manim script generation**
+  - `ManimScriptGenerator` (`MANIM_GENERATOR_MODEL`) converts the plan into a Manim script.
+4. **Render-review-fix loop (low quality)**
+  - Render with Manim + TTS merge.
+  - On render failure, fix compilation errors and retry.
+  - On successful render, run visual review (`VIDEO_REVIEW_MODEL`); if criteria fail, patch script (`VIDEO_FIX_MODEL`) and retry.
+  - Iterate up to `MAX_SCRIPT_ITERATIONS`.
+5. **Final output**
+  - If `--final` is set, do one high-quality render pass.
+  - Otherwise keep low-quality output and save to cache.
+
 ```mermaid
 flowchart TD
-    A[Topic] --> B["1. Lesson Plan (LESSON_PLANNER_MODEL)"]
-    B --> C["2. Manim Script (MANIM_GENERATOR_MODEL)"]
-    C --> LOOP
+   A[Topic + CLI flags] --> B{Input dir provided?}
+   B -- No --> C[Lesson planning]
+   B -- Yes --> D[Preprocess raw -> processed]
+   D --> E[Select relevant docs]
+   E --> C
 
-    subgraph LOOP["3. Iterate up to 8 times at low quality"]
-        R[Render + TTS] --> ERR{Error?}
-        ERR -- Yes --> FIX_COMPILE["Fix agent applies search/replace edits"] --> R
-        ERR -- No --> REV["Review agent (5 visual criteria)"]
-        REV -- All pass --> DONE[Approved]
-        REV -- Any fail --> FIX_VISUAL["Fix agent receives failed criteria + frames"] --> R
-    end
+   C --> F[Generate Manim script]
+   F --> G[Render + merge TTS at low quality]
+   G --> H{Render error?}
+   H -- Yes --> I[Apply compilation fix]
+   I --> G
+   H -- No --> J{Skip review?}
+   J -- Yes --> K{--final?}
+   J -- No --> L[Review video quality]
+   L --> M{Criteria pass?}
+   M -- No --> N[Apply visual fix]
+   N --> G
+   M -- Yes --> K
 
-    DONE --> OUT
-    LOOP --> OUT
-
-    OUT{--final?}
-    OUT -- Yes --> HQ[High-quality re-render]
-    OUT -- No --> V[Final Video]
-    HQ --> V
+   K -- Yes --> O[High-quality render + merge]
+   K -- No --> P[Use low-quality render]
+   O --> Q[Final video in output dir]
+   P --> Q
 ```
 
-**Review criteria:** text clipping, overlapping content, broken animations, content overflow, LaTeX rendering.
+**Review criteria:** text clipping, overlapping content, broken animations, content overflow, and LaTeX rendering quality.
 
 ## Caching
 
@@ -294,21 +317,38 @@ uv run pyright                        # pyright only
 
 ## Project Structure
 
-```
-src/
-  cli.py              # Entry point & argument parsing
-  workflow.py          # Orchestrates the full pipeline
-  script_generator.py  # LLM-driven Manim script generation & fixing
-  input_processor.py   # PDF/video/image/text → LLM content parts
-  audiomanager.py      # TTS integration & audio synchronization
-  cache.py             # Content-addressed caching system
-  settings.py          # Env var loading & defaults
-  paths.py             # Central directory configuration
-  search_replace.py    # Fuzzy search/replace for script patching
-  llm_metrics.py       # Token usage & cost tracking
-  tts/                 # TTS engine implementations (kokoro, piper, qwen)
-prompts/               # LLM system prompts for each pipeline stage
-models/                # Local TTS model weights (Piper)
+High-impact folders and files:
+
+```text
+.
+├── src/
+│   ├── cli.py                  # `uv run lesson` entrypoint and flags
+│   ├── workflow.py             # End-to-end orchestration + cache flow
+│   ├── script_generator.py     # Script generation, review, and fixing logic
+│   ├── rendering.py            # Manim render + TTS merge pipeline
+│   ├── document_selector.py    # LLM-based selection from processed corpora
+│   ├── preprocessing/
+│   │   ├── batch_process.py    # Batch normalize raw course materials
+│   │   ├── process_pdf.py      # PDF extraction/transformation
+│   │   ├── process_video.py    # Video transcription/visual extraction
+│   │   └── process_images.py   # Image-to-text conversion helpers
+│   ├── review/
+│   │   ├── algorithms/         # Frame/visual analysis helpers
+│   │   └── models.py           # Review data models
+│   ├── tts/
+│   │   ├── kokoro.py           # Kokoro backend
+│   │   ├── qwen.py             # Qwen backend
+│   │   └── piper.py            # Piper backend
+│   ├── audiomanager.py         # Runtime narration and timing helpers
+│   ├── cache.py                # Script/audio/video caching utilities
+│   ├── llm_metrics.py          # Token/cost accounting
+│   ├── settings.py             # Environment-driven configuration
+│   └── paths.py                # Shared path constants
+├── prompts/                    # Prompt templates per pipeline stage
+├── courses/                    # Course corpora (raw/processed per course)
+├── tests/                      # Unit and integration tests
+├── models/                     # Local TTS model artifacts
+└── output/                     # Rendered videos and auxiliary outputs
 ```
 
 
