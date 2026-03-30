@@ -36,23 +36,27 @@ audio_manager.done_say()
 - Explain WHY each step is done, not just WHAT
 - Keep each narration segment focused (1-2 sentences)
 - Match narration timing with visual reveals
+- Say what you are showing before you show it, then explain what you have showed
 - Say numbers like a human would: "zero point six repeating" instead of "0.6666666667"
 
 **Visual Guidelines:**
-- Use clear colors (YELLOW, RED, GREEN, BLUE for different elements)
+- Use clear colors only to encode visual meaning in diagrams (points, curves, vectors, regions, arrows), not as decoration
+- Define a consistent color legend per scene and reuse it (example: BLUE = baseline/object A, GREEN = result/object B, YELLOW = active marker)
+- Keep explanatory text, titles, and equations white by default; color text only when directly mapping to a colored visual element
+- Never assign random text colors just for style
 - Include step numbers/labels for clarity
 - Use NumberPlane for geometry, MathTex for equations
 - Try your best to visualize problems and solutions using figures and markers
 - Add proper spacing and positioning (LEFT, RIGHT, UP, DOWN)
 - Try your best to create moving animations and moving updaters for dynamic elements
 - Make sure text is kept on screen, and doesn't overflow, get cut off, or overlap
+- When visualizing a problem, if possible, leave the problem statement or equation at the top so that the student has the context of what is being shown
 
 **Code Style:**
 - Define all vectors/values at the start of each section
 - Use descriptive variable names
 - Add brief comments for major sections
 - Keep equations readable with proper LaTeX formatting
-- There is no upper limit to code length, strive to visulize as much as possible
 
 **Output Format:**
 Generate ONLY the complete Python code. Start with imports, end with the Scene class. No explanations, no markdown formatting, just pure Python code that can be directly executed by manim.
@@ -81,7 +85,6 @@ class ArgMinExample(Scene):
 
         func_text = MathTex("f(x) = 2(x - 5)^2").scale(0.8)
         func_text.to_corner(UP + RIGHT)
-        func_text.set_color(BLUE)
 
         audio_manager.say(
             "Welcome. Today, let us illuminate a beautiful distinction in mathematics: the difference between a minimum value, and the 'arg min'."
@@ -154,7 +157,6 @@ class ArgMinExample(Scene):
         )
         argmin_text = MathTex(r"\arg\min_{x} f(x) = 5").scale(0.8)
         argmin_text.next_to(highlight_line, UP, buff=0.2)
-        argmin_text.set_color(GREEN)
 
         audio_manager.say(
             "And here we arrive. The minimum value of the function is zero, but our 'arg min' is exactly five. We have found the precise source of the optimal outcome."
@@ -287,7 +289,7 @@ class SineCurveUnitCircle(Scene):
         # ==========================================================
         dot.remove_updater(update_dot)
 
-        final_text = Text("Periodic Motion", font_size=36, color=YELLOW)
+        final_text = Text("Periodic Motion", font_size=36)
         final_text.next_to(trace, UP)
 
         audio_manager.say(
@@ -330,11 +332,6 @@ class MovingFrameBox(Scene):
             r"g(x)\frac{d}{dx}f(x)"        # Index 3
         ).scale(1.2)
 
-        # Optional: Add some color to make it pop
-        equation[0].set_color(WHITE)
-        equation[1].set_color(BLUE)
-        equation[3].set_color(GREEN)
-
         audio_manager.say(
             "Today, let us visualize the rhythm of the product rule. It tells us how to differentiate the product of two changing functions."
         )
@@ -372,7 +369,7 @@ class MovingFrameBox(Scene):
         audio_manager.say(
             "Left d-Right, plus Right d-Left. It is a balancing act of rates of change."
         )
-        self.play(FadeOut(framebox2), Flash(equation[2], color=RED, run_time=1.5))
+        self.play(FadeOut(framebox2), Wiggle(equation[2]))
         audio_manager.done_say()
 
         self.wait(1)
