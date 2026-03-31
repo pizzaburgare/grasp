@@ -9,16 +9,15 @@ import numpy as np
 from dotenv import load_dotenv
 from manim import Scene
 
-from src.cache import hash_text
-from src.paths import CACHE_AUDIO_DIR
-from src.settings import (
+from src.core.cache import hash_text
+from src.core.paths import CACHE_AUDIO_DIR
+from src.core.settings import (
     AUDIO_DURATION_BUFFER_SECONDS,
     TTS_MAX_SECONDS_PER_WORD,
     TTS_SYNTHESIS_TIMEOUT_SECONDS,
 )
-from src.utils import format_timestamp
-
-from .tts import TTSEngine, get_default_engine
+from src.core.utils import format_timestamp
+from src.tts import TTSEngine, get_default_engine
 
 load_dotenv()
 

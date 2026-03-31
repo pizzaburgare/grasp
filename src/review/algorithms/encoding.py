@@ -9,8 +9,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from src.core.utils import format_timestamp
 from src.review.algorithms.constants import REVIEW_FRAME_QUALITY
-from src.utils import format_timestamp
 
 
 def encode_selected_frames(

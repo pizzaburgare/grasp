@@ -1,0 +1,111 @@
+"""Core infrastructure shared across pipeline stages."""
+
+from src.core.cache import (
+    get_audio_cache_dir,
+    get_cached_audio,
+    get_cached_script,
+    get_cached_video,
+    get_lesson_cache_dir,
+    hash_context,
+    hash_text,
+    lesson_name_to_key,
+    save_audio_to_cache,
+    save_script_to_cache,
+    save_video_to_cache,
+)
+from src.core.command_runner import run_command
+from src.core.llm_metrics import (
+    LLMUsage,
+    UsageTracker,
+    accumulate_llm_usage,
+    combine_llm_usage,
+    extract_llm_usage,
+    make_openrouter_llm,
+)
+from src.core.paths import (
+    CACHE_AUDIO_DIR,
+    CACHE_DIR,
+    CACHE_MANIM_DIR,
+    IMAGE_TRANSCRIBER_PROMPT,
+    INPUT_DIR,
+    LESSON_PROMPT,
+    MANIM_PROMPT,
+    MODELS_DIR,
+    OUTPUT_DIR,
+    PDF_TRANSCRIBER_PROMPT,
+    PIPER_DEFAULT_MODEL,
+    PROMPTS_DIR,
+    ROOT,
+    VIDEO_FIX_PROMPT,
+    VIDEO_REVIEW_PROMPT,
+)
+from src.core.settings import (
+    AUDIO_DURATION_BUFFER_SECONDS,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_TTS_ENGINE,
+    DOCUMENT_SELECTOR_MODEL,
+    LESSON_PLANNER_MODEL,
+    MANIM_GENERATOR_MODEL,
+    MAX_SCRIPT_ITERATIONS,
+    TTS_MAX_SECONDS_PER_WORD,
+    TTS_SYNTHESIS_TIMEOUT_SECONDS,
+    VIDEO_FIX_MODEL,
+    VIDEO_REVIEW_MODEL,
+    tts_config_fingerprint,
+)
+from src.core.utils import format_timestamp
+
+__all__ = [
+    # settings
+    "AUDIO_DURATION_BUFFER_SECONDS",
+    # paths
+    "CACHE_AUDIO_DIR",
+    "CACHE_DIR",
+    "CACHE_MANIM_DIR",
+    "DEFAULT_LLM_MODEL",
+    "DEFAULT_TTS_ENGINE",
+    "DOCUMENT_SELECTOR_MODEL",
+    "IMAGE_TRANSCRIBER_PROMPT",
+    "INPUT_DIR",
+    "LESSON_PLANNER_MODEL",
+    "LESSON_PROMPT",
+    "MANIM_GENERATOR_MODEL",
+    "MANIM_PROMPT",
+    "MAX_SCRIPT_ITERATIONS",
+    "MODELS_DIR",
+    "OUTPUT_DIR",
+    "PDF_TRANSCRIBER_PROMPT",
+    "PIPER_DEFAULT_MODEL",
+    "PROMPTS_DIR",
+    "ROOT",
+    "TTS_MAX_SECONDS_PER_WORD",
+    "TTS_SYNTHESIS_TIMEOUT_SECONDS",
+    "VIDEO_FIX_MODEL",
+    "VIDEO_FIX_PROMPT",
+    "VIDEO_REVIEW_MODEL",
+    "VIDEO_REVIEW_PROMPT",
+    # llm_metrics
+    "LLMUsage",
+    "UsageTracker",
+    "accumulate_llm_usage",
+    "combine_llm_usage",
+    "extract_llm_usage",
+    # utils
+    "format_timestamp",
+    # cache
+    "get_audio_cache_dir",
+    "get_cached_audio",
+    "get_cached_script",
+    "get_cached_video",
+    "get_lesson_cache_dir",
+    "hash_context",
+    "hash_text",
+    "lesson_name_to_key",
+    "make_openrouter_llm",
+    # command_runner
+    "run_command",
+    "save_audio_to_cache",
+    "save_script_to_cache",
+    "save_video_to_cache",
+    "tts_config_fingerprint",
+]

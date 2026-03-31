@@ -11,7 +11,7 @@ import os
 import sys
 import time
 
-from src.settings import DEFAULT_TTS_ENGINE
+from src.core.settings import DEFAULT_TTS_ENGINE
 from src.tts import available_engines
 
 ENGINES = available_engines()
@@ -40,7 +40,7 @@ if engine_name in ("qwen",):
         print("Using CPU (this will be slow)")
     print()
 
-from src.audiomanager import create_wav  # noqa: E402
+from src.rendering.audio import create_wav  # noqa: E402
 from src.tts import get_default_engine  # noqa: E402
 
 os.environ["TTS_ENGINE"] = engine_name

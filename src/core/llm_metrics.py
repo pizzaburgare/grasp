@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -9,6 +10,9 @@ from typing import Any
 
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
+
+# Suppress verbose HTTP request logs from httpx (used by langchain_openai)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 _OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 _OPENROUTER_HTTP_REFERER = "http://localhost"

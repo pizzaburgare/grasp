@@ -7,7 +7,7 @@ in a mirrored output directory while tracking aggregated LLM usage cost.
 import shutil
 from pathlib import Path
 
-from src.llm_metrics import LLMUsage, accumulate_llm_usage
+from src.core.llm_metrics import LLMUsage, accumulate_llm_usage
 from src.preprocessing.process_images import image_to_md_llm
 from src.preprocessing.process_pdf import convert_pdf_to_md
 from src.preprocessing.process_video import mp4_to_text

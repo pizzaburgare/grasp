@@ -8,8 +8,8 @@ import yaml
 from langchain_core.messages import HumanMessage, SystemMessage
 from markitdown import MarkItDown
 
-from src.llm_metrics import LLMUsage, combine_llm_usage, extract_llm_usage, make_openrouter_llm
-from src.paths import PDF_TRANSCRIBER_PROMPT
+from src.core.llm_metrics import LLMUsage, combine_llm_usage, extract_llm_usage, make_openrouter_llm
+from src.core.paths import PDF_TRANSCRIBER_PROMPT
 
 MIN_FENCE_LINES = 2
 

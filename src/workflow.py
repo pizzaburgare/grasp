@@ -15,25 +15,21 @@ from typing import Any
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.cache import (
+from src.core.cache import (
     get_cached_video,
     get_lesson_cache_dir,
     hash_context,
     lesson_name_to_key,
     save_video_to_cache,
 )
-from src.document_selector import DocumentSelectorAgent
-from src.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
-from src.paths import (
+from src.core.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
+from src.core.paths import (
     CACHE_DIR,
     INPUT_DIR,
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
-from src.preprocessing.batch_process import batch_process
-from src.rendering import render_and_merge
-from src.script_generator import ManimScriptGenerator
-from src.settings import (
+from src.core.settings import (
     DEFAULT_TTS_ENGINE,
     LESSON_PLANNER_MODEL,
     MANIM_GENERATOR_MODEL,
@@ -41,6 +37,10 @@ from src.settings import (
     VIDEO_REVIEW_MODEL,
     tts_config_fingerprint,
 )
+from src.preprocessing import DocumentSelectorAgent
+from src.preprocessing.batch_process import batch_process
+from src.rendering import render_and_merge
+from src.scripting import ManimScriptGenerator
 
 load_dotenv()
 logger = logging.getLogger(__name__)

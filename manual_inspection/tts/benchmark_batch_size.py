@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from src.settings import DEFAULT_TTS_ENGINE
+from src.core.settings import DEFAULT_TTS_ENGINE
 from src.tts import available_engines, get_default_engine
 
 _SAMPLE_TEXTS = [

@@ -5,7 +5,7 @@ from typing import Any
 
 import numpy as np
 
-from src.paths import PIPER_DEFAULT_MODEL
+from src.core.paths import PIPER_DEFAULT_MODEL
 
 from .base import TTSEngine
 

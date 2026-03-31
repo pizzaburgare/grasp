@@ -9,7 +9,7 @@ Usage (after uv sync):
 
 import argparse
 
-from src.settings import (
+from src.core.settings import (
     LESSON_PLANNER_MODEL,
     MANIM_GENERATOR_MODEL,
     VIDEO_REVIEW_MODEL,

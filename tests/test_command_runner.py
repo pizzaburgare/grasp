@@ -1,7 +1,7 @@
 import io
 from unittest.mock import patch
 
-from src.command_runner import run_command
+from src.core.command_runner import run_command
 
 EXPECTED_THREAD_COUNT = 2
 
@@ -62,7 +62,7 @@ class _ThreadSpy:
 class TestCommandRunnerSafety:
     def test_watchdog_kills_hung_subprocess(self) -> None:
         process = _StuckProcess()
-        with patch("src.command_runner.subprocess.Popen", return_value=process):
+        with patch("src.core.command_runner.subprocess.Popen", return_value=process):
             result = run_command(
                 command=["fake", "cmd"],
                 env={},
@@ -88,8 +88,8 @@ class TestCommandRunnerSafety:
             return thread
 
         with (
-            patch("src.command_runner.subprocess.Popen", return_value=process),
-            patch("src.command_runner.threading.Thread", side_effect=_thread_factory),
+            patch("src.core.command_runner.subprocess.Popen", return_value=process),
+            patch("src.core.command_runner.threading.Thread", side_effect=_thread_factory),
         ):
             run_command(
                 command=["fake", "cmd"],

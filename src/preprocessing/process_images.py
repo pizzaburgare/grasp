@@ -4,8 +4,8 @@ import io
 from langchain_core.messages import HumanMessage, SystemMessage
 from PIL import Image
 
-from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
-from src.paths import IMAGE_TRANSCRIBER_PROMPT
+from src.core.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
+from src.core.paths import IMAGE_TRANSCRIBER_PROMPT
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}
 
