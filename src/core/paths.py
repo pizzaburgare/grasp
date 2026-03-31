@@ -3,7 +3,7 @@
 from pathlib import Path
 
 # Project root (one level above this file's directory)
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent.parent
 
 # --- Cache (ephemeral build artifacts, gitignored) ---
 CACHE_DIR = ROOT / ".cache"

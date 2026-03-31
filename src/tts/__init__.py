@@ -1,7 +1,9 @@
+"""Text-to-speech engine registry with lazy loading."""
+
 import os
 from typing import TYPE_CHECKING
 
-from src.settings import DEFAULT_TTS_ENGINE
+from src.core.settings import DEFAULT_TTS_ENGINE
 
 from .base import TTSEngine
 

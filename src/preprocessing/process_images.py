@@ -1,11 +1,13 @@
+"""Image preprocessing and LLM-based transcription to Markdown."""
+
 import base64
 import io
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from PIL import Image
 
-from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
-from src.paths import IMAGE_TRANSCRIBER_PROMPT
+from src.core.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
+from src.core.paths import IMAGE_TRANSCRIBER_PROMPT
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff"}
 
@@ -76,6 +78,7 @@ def image_to_md_llm(
 
 
 def convert_image_to_md(input_file: str, output_file: str) -> LLMUsage | None:
+    """Convert an image file to Markdown and save to output_file."""
     return image_to_md_llm(input_file, output_file)
 
 

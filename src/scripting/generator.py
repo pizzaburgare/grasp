@@ -11,21 +11,21 @@ import numpy as np
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.llm_metrics import (
+from src.core.llm_metrics import (
     LLMUsage,
     accumulate_llm_usage,
     extract_llm_usage,
     make_openrouter_llm,
 )
-from src.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
+from src.core.paths import MANIM_PROMPT, VIDEO_FIX_PROMPT, VIDEO_REVIEW_PROMPT
+from src.core.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
 from src.review.algorithms import (
     encode_selected_frames,
     frame_ssim,
     select_brightness_peak_frames,
 )
 from src.review.models import CodeFix, VideoReview
-from src.search_replace import flexible_search_and_replace
-from src.settings import MANIM_GENERATOR_MODEL, VIDEO_FIX_MODEL, VIDEO_REVIEW_MODEL
+from src.scripting.search_replace import flexible_search_and_replace
 
 load_dotenv()
 
@@ -81,6 +81,7 @@ class ManimScriptGenerator:
         topic: str,
         input_parts: list[dict[str, Any]] | None = None,
     ) -> tuple[str, LLMUsage]:
+        """Generate a Manim script from lesson content using the LLM."""
         text = f"""Topic: {topic}
 
 Lesson Content:
@@ -146,6 +147,7 @@ Generate a complete Manim script that:
         output_path: str | Path,
         input_parts: list[dict[str, Any]] | None = None,
     ) -> LLMUsage:
+        """Generate a Manim script and save it to the specified path."""
         print(f"Generating Manim script ({self.model}) ...")
         script, usage = self.generate_script(lesson_content, topic, input_parts)
         out = Path(output_path)

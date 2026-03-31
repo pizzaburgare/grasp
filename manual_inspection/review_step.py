@@ -28,11 +28,11 @@ import numpy as np  # type: ignore
 from matplotlib.widgets import Button  # type: ignore
 from PIL import Image
 
+from src.core.utils import format_timestamp
 from src.review.algorithms import extract_video_frames_parts, lightness_score, scan_settled_frames
 from src.review.algorithms.similarity import frame_ssim
 from src.review.models import VideoReview
-from src.script_generator import ManimScriptGenerator
-from src.utils import format_timestamp
+from src.scripting import ManimScriptGenerator
 
 BG = "#0d0d0d"
 SSIM_GREEN_THRESHOLD = 90

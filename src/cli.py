@@ -9,7 +9,7 @@ Usage (after uv sync):
 
 import argparse
 
-from src.settings import (
+from src.core.settings import (
     LESSON_PLANNER_MODEL,
     MANIM_GENERATOR_MODEL,
     VIDEO_REVIEW_MODEL,
@@ -18,6 +18,7 @@ from src.workflow import CourseWorkflow
 
 
 def main() -> None:
+    """Parse CLI arguments and run the course video generation workflow."""
     parser = argparse.ArgumentParser(
         description="Generate an AI course lesson video with narration",
         formatter_class=argparse.RawDescriptionHelpFormatter,

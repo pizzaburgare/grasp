@@ -24,7 +24,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from src.paths import CACHE_DIR
+from src.core.paths import CACHE_DIR
 
 # ---------------------------------------------------------------------------
 # Lesson key / directory helpers

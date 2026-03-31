@@ -16,8 +16,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from src.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
-from src.settings import DOCUMENT_SELECTOR_MODEL
+from src.core.llm_metrics import LLMUsage, extract_llm_usage, make_openrouter_llm
+from src.core.settings import DOCUMENT_SELECTOR_MODEL
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -73,6 +73,8 @@ class _Selection(BaseModel):
 
 
 class DocumentSelectorAgent:
+    """Agent that selects relevant documents from a directory for a given topic."""
+
     def __init__(self, base_dir: Path, model: str | None = None) -> None:
         self.base_dir = base_dir.resolve()
         self._llm = make_openrouter_llm(model or DOCUMENT_SELECTOR_MODEL, title="Document Selector")

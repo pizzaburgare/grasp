@@ -1,3 +1,5 @@
+"""Video processing: transcription and frame description extraction."""
+
 import base64
 import io
 import tempfile
@@ -7,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from moviepy import VideoFileClip  # type: ignore
 from PIL import Image
 
-from src.llm_metrics import LLMUsage, combine_llm_usage, extract_llm_usage, make_openrouter_llm
+from src.core.llm_metrics import LLMUsage, combine_llm_usage, extract_llm_usage, make_openrouter_llm
 
 
 def _extract_audio(video_path: str, output_path: str) -> None:

@@ -1,3 +1,6 @@
+"""Common utility functions."""
+
+
 def format_timestamp(seconds: float) -> str:
     """Format *seconds* as ``H:MM:SS`` or ``MM:SS`` (no milliseconds)."""
     total = int(seconds)

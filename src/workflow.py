@@ -10,30 +10,26 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.cache import (
+from src.core.cache import (
     get_cached_video,
     get_lesson_cache_dir,
     hash_context,
     lesson_name_to_key,
     save_video_to_cache,
 )
-from src.document_selector import DocumentSelectorAgent
-from src.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
-from src.paths import (
+from src.core.llm_metrics import LLMUsage, UsageTracker, extract_llm_usage, make_openrouter_llm
+from src.core.paths import (
     CACHE_DIR,
     INPUT_DIR,
     LESSON_PROMPT,
     MANIM_PROMPT,
 )
-from src.preprocessing.batch_process import batch_process
-from src.rendering import render_and_merge
-from src.script_generator import ManimScriptGenerator
-from src.settings import (
+from src.core.settings import (
     DEFAULT_TTS_ENGINE,
     LESSON_PLANNER_MODEL,
     MANIM_GENERATOR_MODEL,
@@ -41,9 +37,28 @@ from src.settings import (
     VIDEO_REVIEW_MODEL,
     tts_config_fingerprint,
 )
+from src.preprocessing import DocumentSelectorAgent
+from src.preprocessing.batch_process import batch_process
+from src.rendering import render_and_merge
+from src.scripting import ManimScriptGenerator
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+
+class PipelineContext(TypedDict):
+    """Context for a single pipeline run."""
+
+    topic: str
+    prompt_topic: str
+    slug: str
+    input_dir: str | None
+    out: Path
+    script_hash: str
+    video_hash: str
+    tts_engine: str
+    final_quality: bool
+    skip_review: bool
 
 
 def _try_decode_topic(topic: str) -> tuple[str, bool]:
@@ -58,8 +73,7 @@ def _try_decode_topic(topic: str) -> tuple[str, bool]:
         decoded = base64.b64decode(topic, validate=True).decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError):
         return topic, False
-    else:
-        return decoded, True
+    return decoded, True
 
 
 def _rel(path: Path | str) -> Path:
@@ -70,37 +84,30 @@ def _rel(path: Path | str) -> Path:
         return Path(path)
 
 
-def _print_pipeline_header(
-    topic: str,
-    prompt_topic: str,
-    topic_was_base64: bool,
-    wf: "CourseWorkflow",
-    tts_engine: str,
-    input_dir: str | None,
-    out: Path,
-    script_hash: str,
-    video_hash: str,
-) -> None:
+def _print_pipeline_header(ctx: PipelineContext, wf: "CourseWorkflow") -> None:
+    """Print pipeline configuration header."""
     print("=" * 60)
     print("Starting AI Course Generation Pipeline")
-    print(f"Topic:          {topic}")
-    if topic_was_base64:
-        print(f"Prompt topic:   {prompt_topic}")
+    print(f"Topic:          {ctx['topic']}")
+    if ctx["topic"] != ctx["prompt_topic"]:
+        print(f"Prompt topic:   {ctx['prompt_topic']}")
     print(f"Planner model:  {wf.model}")
     print(f"Script model:   {wf.manim_model}")
     print(f"Review model:   {wf.review_model}")
     print(f"Fix model:      {wf.script_generator.fix_model}")
-    print(f"TTS engine:     {tts_engine}")
-    if input_dir:
-        print(f"Input dir:      {_rel(input_dir)}")
-    print(f"Output dir:     {_rel(out)}")
+    print(f"TTS engine:     {ctx['tts_engine']}")
+    if ctx["input_dir"]:
+        print(f"Input dir:      {_rel(ctx['input_dir'])}")
+    print(f"Output dir:     {_rel(ctx['out'])}")
     print(f"Cache dir:      {_rel(CACHE_DIR)}")
-    print(f"Script hash:    {script_hash}")
-    print(f"Video hash:     {video_hash}")
+    print(f"Script hash:    {ctx['script_hash']}")
+    print(f"Video hash:     {ctx['video_hash']}")
     print("=" * 60)
 
 
 class CourseWorkflow:
+    """Orchestrates the full course generation pipeline."""
+
     def __init__(self, model: str | None = None) -> None:
         # If a global model override is supplied (e.g. via --model CLI flag)
         # it takes precedence over every stage's env-configured model.
@@ -149,6 +156,7 @@ class CourseWorkflow:
         topic: str,
         input_parts: list[dict[str, Any]] | None = None,
     ) -> tuple[str, LLMUsage]:
+        """Generate a lesson plan for the given topic using the planner LLM."""
         print(f"Generating lesson plan for: {topic}")
 
         if not input_parts:
@@ -184,20 +192,42 @@ class CourseWorkflow:
     # Render + review loop
     # ------------------------------------------------------------------
 
-    def _render_loop(
-        self,
-        topic: str,
-        slug: str,
-        script_path: Path,
-        out: Path,
-        video_hash: str,
-        final_quality: bool,
-        skip_review: bool,
-        tracker: UsageTracker,
-    ) -> Path:
+    def _run_single_iteration(self, *, slug: str, script_path: Path, out: Path) -> Path:
+        """Run a single low-quality render iteration."""
+        return render_and_merge(script_path, out, slug, False, lesson_name=slug, context_hash=None)
+
+    def _handle_render_error(
+        self, *, exc: Exception, script_path: Path, topic: str, iter_label: str
+    ) -> LLMUsage:
+        """Fix a compilation error and return the usage."""
+        error_text = str(exc)
+        print(f"  Render failed {iter_label}: {error_text[:200]}")
+        current_script = script_path.read_text()
+        fixed, fix_usage = self.script_generator.fix_compilation_error(
+            script=current_script, error_output=error_text, topic=topic
+        )
+        script_path.write_text(fixed)
+        print(f"  Overwritten script: {script_path}")
+        return fix_usage
+
+    def _review_and_update(
+        self, *, script_path: Path, video_path: Path, topic: str
+    ) -> tuple[bool, LLMUsage]:
+        """Review video and update script if needed. Returns (changed, usage)."""
+        current_script = script_path.read_text()
+        new_script, changed, review_usage = self.script_generator.review_video(
+            script=current_script, video_path=video_path, topic=topic
+        )
+        if changed:
+            script_path.write_text(new_script)
+            print(f"  Overwritten script: {script_path}")
+        return changed, review_usage
+
+    def _render_loop(self, ctx: PipelineContext, script_path: Path, tracker: UsageTracker) -> Path:
+        """Iterate render/review until video passes or max iterations reached."""
+        slug, topic, out = ctx["slug"], ctx["prompt_topic"], ctx["out"]
         max_iters = MAX_SCRIPT_ITERATIONS
         final_video: Path | None = None
-
         self.script_generator.reset_review_cache()
 
         for iteration in range(max_iters):
@@ -205,63 +235,38 @@ class CourseWorkflow:
             print(f"Step 3 {iter_label}: Render + merge (low quality)")
 
             try:
-                final_video = render_and_merge(
-                    script_path,
-                    out,
-                    slug,
-                    False,  # always low quality during iteration
-                    lesson_name=slug,
-                    context_hash=None,  # don't cache intermediate renders
+                final_video = self._run_single_iteration(
+                    slug=slug, script_path=script_path, out=out
                 )
             except (RuntimeError, FileNotFoundError) as exc:
                 if iteration >= max_iters - 1:
                     raise
-
-                error_text = str(exc)
-                print(f"  Render failed {iter_label}: {error_text[:200]}")
-                current_script = script_path.read_text()
-                fixed, fix_usage = self.script_generator.fix_compilation_error(
-                    script=current_script,
-                    error_output=error_text,
-                    topic=topic,
+                fix_usage = self._handle_render_error(
+                    exc=exc, script_path=script_path, topic=topic, iter_label=iter_label
                 )
-                script_path.write_text(fixed)
-                print(f"  Overwritten script: {script_path}")
                 tracker.record(f"Step 3 {iter_label} - error fix", fix_usage)
                 continue
 
-            if skip_review or iteration >= max_iters - 1:
+            if ctx["skip_review"] or iteration >= max_iters - 1:
                 break
 
-            current_script = script_path.read_text()
-            new_script, changed, review_usage = self.script_generator.review_video(
-                script=current_script,
-                video_path=final_video,
-                topic=topic,
+            changed, review_usage = self._review_and_update(
+                script_path=script_path, video_path=final_video, topic=topic
             )
             tracker.record(f"Step 3 {iter_label} - video review", review_usage)
-
             if not changed:
                 break
-
-            script_path.write_text(new_script)
-            print(f"  Overwritten script: {script_path}")
 
         if final_video is None:
             raise RuntimeError("All render iterations failed.")
 
-        if final_quality:
+        if ctx["final_quality"]:
             print("Step 3 [final]: Render + merge (high quality)")
             final_video = render_and_merge(
-                script_path,
-                out,
-                slug,
-                final_quality,
-                lesson_name=slug,
-                context_hash=video_hash,
+                script_path, out, slug, True, lesson_name=slug, context_hash=ctx["video_hash"]
             )
         else:
-            save_video_to_cache(slug, video_hash, final_video)
+            save_video_to_cache(slug, ctx["video_hash"], final_video)
 
         return final_video
 
@@ -269,70 +274,88 @@ class CourseWorkflow:
     # Full pipeline
     # ------------------------------------------------------------------
 
-    def run_full_pipeline(
-        self,
-        topic: str,
-        input_dir: str | None = None,
-        output_dir: str = "output",
-        final_quality: bool = False,
-        skip_review: bool = False,
-        user_script_hash: str | None = None,
-    ) -> dict[str, Any]:
-        slug = lesson_name_to_key(topic)
-        prompt_topic, topic_was_base64 = _try_decode_topic(topic)
-        out = Path(output_dir)
-        tts_engine = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
+    def _handle_cached_video(self, ctx: PipelineContext) -> dict[str, Any] | None:
+        """Check for cached video and return result dict if found, None otherwise."""
+        slug, video_hash, script_hash = ctx["slug"], ctx["video_hash"], ctx["script_hash"]
+        out, topic = ctx["out"], ctx["topic"]
 
-        if input_dir is None and INPUT_DIR.is_dir():
-            input_dir = str(INPUT_DIR)
+        cached_video = get_cached_video(slug, video_hash)
+        if not cached_video:
+            return None
 
-        script_hash = user_script_hash or hash_context(
-            topic,
-            input_dir,
-            extra_context=self._build_script_context(),
-        )
-        video_hash = hash_context(
-            topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality)
-        )
-
-        _print_pipeline_header(
-            topic,
-            prompt_topic,
-            topic_was_base64,
-            self,
-            tts_engine,
-            input_dir,
-            out,
-            script_hash,
-            video_hash,
-        )
         tracker = UsageTracker()
+        tracker.record("Step 1 - Lesson planning", skipped=True)
+        tracker.record("Step 2 - Script generation", skipped=True)
+        print()
+        print("=" * 60)
+        print("Nothing has changed - all assets already cached.")
+        print(f"  script : .cache/{slug}/script/{script_hash}.py")
+        print(f"  video  : .cache/{slug}/video/{video_hash}.mp4")
+        print("=" * 60)
+        out.mkdir(parents=True, exist_ok=True)
+        final_path = out / f"{slug}.mp4"
+        shutil.copy2(cached_video, final_path)
+        print(f"Final video: {final_path}")
+        return {
+            "output_dir": str(out),
+            "lesson_plan": None,
+            "script_path": None,
+            "final_video": str(final_path),
+            "topic": topic,
+            "cache_hit": "video",
+            "openrouter_usage": tracker.summarize(),
+        }
 
-        # Fast path: cached video
-        if cached_video := get_cached_video(slug, video_hash):
-            tracker.record("Step 1 - Lesson planning", skipped=True)
-            tracker.record("Step 2 - Script generation", skipped=True)
-            print()
-            print("=" * 60)
-            print("Nothing has changed - all assets already cached.")
-            print(f"  script : .cache/{slug}/script/{script_hash}.py")
-            print(f"  video  : .cache/{slug}/video/{video_hash}.mp4")
-            print("=" * 60)
-            out.mkdir(parents=True, exist_ok=True)
-            final_path = out / f"{slug}.mp4"
-            shutil.copy2(cached_video, final_path)
-            print(f"Final video: {final_path}")
-            return {
-                "output_dir": str(out),
-                "lesson_plan": None,
-                "script_path": None,
-                "final_video": str(final_path),
-                "topic": topic,
-                "cache_hit": "video",
-                "openrouter_usage": tracker.summarize(),
+    def _process_input_materials(
+        self, input_dir: str, prompt_topic: str, tracker: UsageTracker
+    ) -> list[dict[str, Any]]:
+        """Process input directory and return LLM-ready content parts."""
+        input_path = Path(input_dir)
+        raw_dir = (input_path / "raw").resolve()
+        processed_dir = (input_path / "processed").resolve()
+
+        assert raw_dir.is_dir(), f"Expected 'raw' subdirectory under {input_dir} for course inputs"
+
+        print("Preprocessing raw input files ...")
+        preprocessing_usage = batch_process(raw_dir, processed_dir)
+        selector_agent = DocumentSelectorAgent(processed_dir)
+
+        selected, selection_usage = selector_agent.select(prompt_topic)
+        tracker.record("Step 0 - Selecting documents", selection_usage)
+
+        cost_str = (
+            f"${selection_usage.cost_usd:.6f}" if selection_usage.cost_usd is not None else "n/a"
+        )
+        print(f"Selected files cost={cost_str}")
+        for path in selected:
+            print(f"  - {path.resolve().relative_to(processed_dir).as_posix()}")
+
+        input_parts = [
+            {
+                "type": "text",
+                "text": f"--- File: {path.resolve().relative_to(processed_dir).as_posix()} ---\n"
+                f"{path.read_text(errors='replace')}",
             }
+            for path in selected
+        ]
 
-        # Steps 1+2: lesson plan + Manim script
+        tracker.record("Step -1 - Preparing input for lesson plan", preprocessing_usage)
+        preprocessing_cost_str = (
+            f"${preprocessing_usage.cost_usd:.4f}"
+            if preprocessing_usage.cost_usd is not None
+            else "n/a"
+        )
+        print(
+            f"{len(input_parts)} file(s), "
+            f"total LLM cost for preprocessing: {preprocessing_cost_str}"
+        )
+        return input_parts
+
+    def _generate_script(self, ctx: PipelineContext, tracker: UsageTracker) -> tuple[Path, str]:
+        """Generate or load cached lesson plan and script. Returns (script_path, lesson)."""
+        slug, script_hash = ctx["slug"], ctx["script_hash"]
+        prompt_topic, input_dir = ctx["prompt_topic"], ctx["input_dir"]
+
         script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
         lesson_plan_path = script_path.with_suffix(".md")
 
@@ -341,86 +364,73 @@ class CourseWorkflow:
             lesson = lesson_plan_path.read_text() if lesson_plan_path.exists() else ""
             tracker.record("Step 1 - Lesson planning", skipped=True)
             tracker.record("Step 2 - Script generation", skipped=True)
+            return script_path, lesson
+
+        input_parts: list[dict[str, Any]] | None = None
+        if input_dir:
+            input_parts = self._process_input_materials(input_dir, prompt_topic, tracker)
         else:
-            # Process input materials
-            input_parts: list[dict[str, Any]] | None = None
+            tracker.record("Step 0 - Selecting documents", skipped=True)
 
-            if input_dir:
-                input_path = Path(input_dir)
+        lesson, lesson_usage = self.generate_lesson_plan(prompt_topic, input_parts=input_parts)
+        tracker.record("Step 1 - Lesson planning", lesson_usage)
+        lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
+        lesson_plan_path.write_text(lesson)
+        print(f"Lesson plan: {lesson_plan_path}\n")
 
-                # If input points at a course directory, preprocess raw assets first.
-                raw_dir = (input_path / "raw").resolve()
-                processed_dir = (input_path / "processed").resolve()
+        script_usage = self.script_generator.generate_and_save(
+            lesson_content=lesson,
+            topic=prompt_topic,
+            output_path=script_path,
+            input_parts=input_parts,
+        )
+        tracker.record("Step 2 - Script generation", script_usage)
+        return script_path, lesson
 
-                assert raw_dir.is_dir(), (
-                    f"Expected 'raw' subdirectory under {input_dir} for course inputs"
-                )
+    def run_full_pipeline(
+        self,
+        topic: str,
+        input_dir: str | None = None,
+        output_dir: str = "output",
+        *,
+        final_quality: bool = False,
+        skip_review: bool = False,
+        user_script_hash: str | None = None,
+    ) -> dict[str, Any]:
+        """Run the complete course generation pipeline from topic to final video."""
+        prompt_topic, _ = _try_decode_topic(topic)
+        tts_engine = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
 
-                print("Preprocessing raw input files ...")
-                preprocessing_usage = batch_process(raw_dir, processed_dir)
-                selector_agent = DocumentSelectorAgent(processed_dir)
+        if input_dir is None and INPUT_DIR.is_dir():
+            input_dir = str(INPUT_DIR)
 
-                selected, selection_usage = selector_agent.select(prompt_topic)
-                tracker.record("Step 0 - Selecting documents", selection_usage)
+        ctx: PipelineContext = {
+            "topic": topic,
+            "prompt_topic": prompt_topic,
+            "slug": lesson_name_to_key(topic),
+            "input_dir": input_dir,
+            "out": Path(output_dir),
+            "script_hash": user_script_hash
+            or hash_context(topic, input_dir, extra_context=self._build_script_context()),
+            "video_hash": hash_context(
+                topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality)
+            ),
+            "tts_engine": tts_engine,
+            "final_quality": final_quality,
+            "skip_review": skip_review,
+        }
 
-                cost_str = (
-                    f"${selection_usage.cost_usd:.6f}"
-                    if selection_usage.cost_usd is not None
-                    else "n/a"
-                )
+        _print_pipeline_header(ctx, self)
 
-                print(f"Selected files cost={cost_str}")
-                for path in selected:
-                    print(f"  - {path.resolve().relative_to(processed_dir).as_posix()}")
-                input_parts = []
-                for path in selected:
-                    rel_path = path.resolve().relative_to(processed_dir).as_posix()
-                    input_parts.append(
-                        {
-                            "type": "text",
-                            "text": f"--- File: {rel_path} ---\n{path.read_text(errors='replace')}",
-                        }
-                    )
-                tracker.record("Step -1 - Preparing input for lesson plan", preprocessing_usage)
-                preprocessing_cost_str = (
-                    f"${preprocessing_usage.cost_usd:.4f}"
-                    if preprocessing_usage.cost_usd is not None
-                    else "n/a"
-                )
+        # Fast path: cached video
+        if cached := self._handle_cached_video(ctx):
+            return cached
 
-                print(
-                    f"{len(input_parts)} file(s),"
-                    f"total LLM cost for preprocessing: {preprocessing_cost_str}"
-                )
-            else:
-                tracker.record("Step 0 - Selecting documents", skipped=True)
-
-            lesson, lesson_usage = self.generate_lesson_plan(prompt_topic, input_parts=input_parts)
-            tracker.record("Step 1 - Lesson planning", lesson_usage)
-            lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
-            lesson_plan_path.write_text(lesson)
-            print(f"Lesson plan: {lesson_plan_path}\n")
-            script_usage = self.script_generator.generate_and_save(
-                lesson_content=lesson,
-                topic=prompt_topic,
-                output_path=script_path,
-                input_parts=input_parts,
-            )
-            tracker.record("Step 2 - Script generation", script_usage)
-
+        tracker = UsageTracker()
+        script_path, lesson = self._generate_script(ctx, tracker)
         print()
 
-        # Step 3: Render + review loop
-        final_video = self._render_loop(
-            prompt_topic,
-            slug,
-            script_path,
-            out,
-            video_hash,
-            final_quality,
-            skip_review,
-            tracker,
-        )
+        final_video = self._render_loop(ctx, script_path, tracker)
 
         print()
         print("=" * 60)
@@ -429,7 +439,7 @@ class CourseWorkflow:
         print("=" * 60)
 
         return {
-            "output_dir": str(out),
+            "output_dir": str(ctx["out"]),
             "lesson_plan": lesson,
             "script_path": str(script_path),
             "final_video": str(final_video),

@@ -1,7 +1,26 @@
+"""Run subprocess commands with timeout protection, spinner feedback, and output drains."""
+
 import subprocess
 import threading
 import time
+from dataclasses import dataclass
 from typing import IO
+
+POLL_INTERVAL_SECONDS = 0.2
+DRAIN_JOIN_TIMEOUT_SECONDS = 30.0
+WATCHDOG_TIMEOUT_SECONDS = 1800.0
+
+
+@dataclass
+class CommandConfig:
+    """Configuration for running a command with timeouts."""
+
+    command: list[str]
+    env: dict[str, str]
+    status_label: str
+    poll_interval_seconds: float = POLL_INTERVAL_SECONDS
+    drain_join_timeout_seconds: float = DRAIN_JOIN_TIMEOUT_SECONDS
+    watchdog_timeout_seconds: float = WATCHDOG_TIMEOUT_SECONDS
 
 
 class SpinnerReporter:
@@ -13,6 +32,7 @@ class SpinnerReporter:
         self.status_label = status_label
 
     def render_tick(self, spinner_index: int, elapsed: float) -> None:
+        """Print spinner frame with elapsed time."""
         print(
             (
                 f"\r{self.status_label} "
@@ -24,6 +44,7 @@ class SpinnerReporter:
         )
 
     def render_done(self, elapsed: float) -> None:
+        """Print completion checkmark with final elapsed time."""
         print(f"\r{self.status_label} ✓ {elapsed:5.1f}s")
 
 
@@ -77,10 +98,12 @@ class ProcessStreamDrainer:
             buf.append(chunk)
 
     def start(self) -> None:
+        """Start background threads to drain stdout and stderr."""
         self._stdout_thread.start()
         self._stderr_thread.start()
 
     def finish(self, join_timeout_seconds: float) -> tuple[str, str, bool]:
+        """Wait for drain threads and return (stdout, stderr, stuck_flag)."""
         self._stdout_thread.join(timeout=join_timeout_seconds)
         self._stderr_thread.join(timeout=join_timeout_seconds)
         drain_thread_stuck = self._stdout_thread.is_alive() or self._stderr_thread.is_alive()
@@ -97,21 +120,19 @@ class CommandResultFormatter:
 
     @staticmethod
     def build(
-        command: list[str],
+        config: CommandConfig,
         process: subprocess.Popen[str],
         stdout_text: str,
         stderr_text: str,
-        status_label: str,
         timed_out: bool,
         drain_thread_stuck: bool,
-        watchdog_timeout_seconds: float,
-        drain_join_timeout_seconds: float,
     ) -> subprocess.CompletedProcess[str]:
+        """Build CompletedProcess with timeout/drain annotations in stderr."""
         return_code = process.returncode if process.returncode is not None else 1
 
         if timed_out:
             timeout_note = (
-                f"{status_label} timed out after {watchdog_timeout_seconds:.1f}s. "
+                f"{config.status_label} timed out after {config.watchdog_timeout_seconds:.1f}s. "
                 "Subprocess was killed by watchdog."
             )
             stderr_text = f"{stderr_text}\n{timeout_note}".strip()
@@ -121,13 +142,13 @@ class CommandResultFormatter:
 
         if drain_thread_stuck:
             join_note = (
-                f"{status_label} output drain thread did not stop within "
-                f"{drain_join_timeout_seconds:.1f}s join timeout."
+                f"{config.status_label} output drain thread did not stop within "
+                f"{config.drain_join_timeout_seconds:.1f}s join timeout."
             )
             stderr_text = f"{stderr_text}\n{join_note}".strip()
 
         return subprocess.CompletedProcess(
-            args=command,
+            args=config.command,
             returncode=return_code,
             stdout=stdout_text,
             stderr=stderr_text,
@@ -135,6 +156,7 @@ class CommandResultFormatter:
 
     @staticmethod
     def print_failure_tail(status_label: str, result: subprocess.CompletedProcess[str]) -> None:
+        """Print last 30 lines of output if the command failed."""
         if result.returncode == 0:
             return
 
@@ -147,10 +169,29 @@ class CommandResultFormatter:
         print(tail)
 
 
-# TODO: Use existing library for spinner
-POLL_INTERVAL_SECONDS = 0.2
-DRAIN_JOIN_TIMEOUT_SECONDS = 30.0
-WATCHDOG_TIMEOUT_SECONDS = 1800.0
+def _run_command_loop(
+    config: CommandConfig,
+    process: subprocess.Popen[str],
+    start: float,
+) -> tuple[str, str, bool, bool]:
+    """Execute the poll/spinner loop and return (stdout, stderr, timed_out, drain_stuck)."""
+    drainer = ProcessStreamDrainer(process)
+    drainer.start()
+    spinner = SpinnerReporter(config.status_label)
+
+    i = 0
+    timed_out = False
+    while process.poll() is None:
+        timed_out, elapsed = check_process_timeout(process, start, config.watchdog_timeout_seconds)
+        if timed_out:
+            break
+        spinner.render_tick(i, elapsed)
+        time.sleep(config.poll_interval_seconds)
+        i += 1
+
+    stdout_text, stderr_text, drain_stuck = drainer.finish(config.drain_join_timeout_seconds)
+    spinner.render_done(time.perf_counter() - start)
+    return stdout_text, stderr_text, timed_out, drain_stuck
 
 
 def run_command(
@@ -163,6 +204,15 @@ def run_command(
     watchdog_timeout_seconds: float = WATCHDOG_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     """Run subprocess commands with timeout, spinner, and non-blocking output drains."""
+    config = CommandConfig(
+        command=command,
+        env=env,
+        status_label=status_label,
+        poll_interval_seconds=poll_interval_seconds,
+        drain_join_timeout_seconds=drain_join_timeout_seconds,
+        watchdog_timeout_seconds=watchdog_timeout_seconds,
+    )
+
     start = time.perf_counter()
     process = subprocess.Popen(
         command,
@@ -172,36 +222,15 @@ def run_command(
         text=True,
     )
 
-    drainer = ProcessStreamDrainer(process)
-    drainer.start()
-    spinner = SpinnerReporter(status_label)
-
-    i = 0
-    timed_out = False
-    while process.poll() is None:
-        timed_out, elapsed = check_process_timeout(process, start, watchdog_timeout_seconds)
-        if timed_out:
-            break
-
-        spinner.render_tick(i, elapsed)
-        time.sleep(poll_interval_seconds)
-        i += 1
-
-    stdout_text, stderr_text, drain_thread_stuck = drainer.finish(drain_join_timeout_seconds)
-
-    elapsed = time.perf_counter() - start
-    spinner.render_done(elapsed)
+    stdout_text, stderr_text, timed_out, drain_stuck = _run_command_loop(config, process, start)
     result = CommandResultFormatter.build(
-        command=command,
+        config=config,
         process=process,
         stdout_text=stdout_text,
         stderr_text=stderr_text,
-        status_label=status_label,
         timed_out=timed_out,
-        drain_thread_stuck=drain_thread_stuck,
-        watchdog_timeout_seconds=watchdog_timeout_seconds,
-        drain_join_timeout_seconds=drain_join_timeout_seconds,
+        drain_thread_stuck=drain_stuck,
     )
-    CommandResultFormatter.print_failure_tail(status_label, result)
 
+    CommandResultFormatter.print_failure_tail(status_label, result)
     return result

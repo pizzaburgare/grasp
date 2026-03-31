@@ -1,3 +1,5 @@
+"""Audio synthesis and merging for Manim scene narration."""
+
 import os
 import shutil
 import wave
@@ -8,22 +10,50 @@ from pathlib import Path
 import numpy as np
 from dotenv import load_dotenv
 from manim import Scene
+from numpy.typing import NDArray
 
-from src.cache import hash_text
-from src.paths import CACHE_AUDIO_DIR
-from src.settings import (
+from src.core.cache import hash_text
+from src.core.paths import CACHE_AUDIO_DIR
+from src.core.settings import (
     AUDIO_DURATION_BUFFER_SECONDS,
     TTS_MAX_SECONDS_PER_WORD,
     TTS_SYNTHESIS_TIMEOUT_SECONDS,
 )
-from src.utils import format_timestamp
-
-from .tts import TTSEngine, get_default_engine
+from src.core.utils import format_timestamp
+from src.tts import TTSEngine, get_default_engine
 
 load_dotenv()
 
 CHANNELS = 1
 SAMPLE_WIDTH = 2  # 16-bit
+
+
+def _write_wav(path: Path, audio: NDArray[np.int16], sample_rate: int) -> None:
+    """Write int16 audio data to a WAV file."""
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(SAMPLE_WIDTH)
+        wf.setframerate(sample_rate)
+        wf.writeframes(audio.tobytes())
+
+
+def _read_wav_duration(path: Path) -> float:
+    """Read a WAV file and return its duration in seconds."""
+    with wave.open(str(path), "rb") as wf:
+        return wf.getnframes() / wf.getframerate()
+
+
+def _read_wav_params(path: Path) -> tuple[int, int, int]:
+    """Read WAV file and return (sample_rate, n_channels, sample_width)."""
+    with wave.open(str(path), "rb") as wf:
+        return wf.getframerate(), wf.getnchannels(), wf.getsampwidth()
+
+
+def _read_wav_data(path: Path) -> NDArray[np.int16]:
+    """Read WAV file and return audio data as int16 numpy array."""
+    with wave.open(str(path), "rb") as wf:
+        frames = wf.readframes(wf.getnframes())
+        return np.frombuffer(frames, dtype=np.int16)
 
 
 def _audio_logs_enabled() -> bool:
@@ -90,6 +120,40 @@ def _engine_cache_salt(engine: TTSEngine) -> str | None:
     return "|".join(pairs)
 
 
+def _link_or_copy(src: Path, dst: Path) -> None:
+    """Hard-link src to dst, falling back to copy if cross-device."""
+    if dst.exists():
+        dst.unlink()
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copy2(src, dst)
+
+
+def _synthesize_with_timeout(
+    engine: TTSEngine, text: str, word_count: int
+) -> tuple[np.ndarray, int]:
+    """Run TTS synthesis with a timeout, raising RuntimeError on timeout or bad output."""
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(engine.synthesize, text)
+        try:
+            audio, sr = future.result(timeout=TTS_SYNTHESIS_TIMEOUT_SECONDS)
+        except FuturesTimeoutError as err:
+            raise RuntimeError(
+                f"TTS synthesis timed out after {TTS_SYNTHESIS_TIMEOUT_SECONDS}s"
+                f"({word_count} words)"
+            ) from err
+
+    max_duration = word_count * TTS_MAX_SECONDS_PER_WORD
+    if len(audio) / sr > max_duration:
+        raise RuntimeError(
+            f"TTS output rejected: {len(audio) / sr:.1f}s for {word_count} words "
+            f"(limit {max_duration:.1f}s at {TTS_MAX_SECONDS_PER_WORD}s/word). "
+            "Likely corrupt/runaway model output."
+        )
+    return audio, sr
+
+
 def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
     """Synthesise *text_to_speak* and write it as ``audio_{i}.wav``.
 
@@ -100,61 +164,28 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
     """
     out_path = _audio_dir() / f"audio_{i}.wav"
     cache_dir = _audio_cache_dir()
-    cache_salt = _engine_cache_salt(engine)
-    cache_key = hash_text(text_to_speak, salt=cache_salt)
-    cached_wav: Path | None = None
+    cache_key = hash_text(text_to_speak, salt=_engine_cache_salt(engine))
+    cached_wav = cache_dir / f"{cache_key}.wav" if cache_dir else None
 
-    if cache_dir is not None:
-        cached_wav = cache_dir / f"{cache_key}.wav"
-        if cached_wav.exists():
-            # Hard-link to avoid copying bytes; fall back to copy if cross-device.
-            if out_path.exists():
-                out_path.unlink()
-            try:
-                os.link(cached_wav, out_path)
-            except OSError:
-                shutil.copy2(cached_wav, out_path)
-            with wave.open(str(out_path), "rb") as wf:
-                return (wf.getnframes() / wf.getframerate()) + AUDIO_DURATION_BUFFER_SECONDS
+    if cached_wav and cached_wav.exists():
+        _link_or_copy(cached_wav, out_path)
+        return _read_wav_duration(out_path) + AUDIO_DURATION_BUFFER_SECONDS
 
     word_count = max(len(text_to_speak.split()), 1)
-    with ThreadPoolExecutor(max_workers=1) as _executor:
-        _future = _executor.submit(engine.synthesize, text_to_speak)
-        try:
-            audio, sr = _future.result(timeout=TTS_SYNTHESIS_TIMEOUT_SECONDS)
-        except FuturesTimeoutError as err:
-            raise RuntimeError(
-                "TTS synthesis timed out after "
-                f"{TTS_SYNTHESIS_TIMEOUT_SECONDS}s ({word_count} words)"
-            ) from err
-
-    actual_duration = len(audio) / sr
-    max_duration = word_count * TTS_MAX_SECONDS_PER_WORD
-    if actual_duration > max_duration:
-        raise RuntimeError(
-            f"TTS output rejected: {actual_duration:.1f}s for {word_count} words "
-            f"(limit {max_duration:.1f}s at {TTS_MAX_SECONDS_PER_WORD}s/word). "
-            "Likely corrupt/runaway model output."
-        )
-
+    audio, sr = _synthesize_with_timeout(engine, text_to_speak, word_count)
     audio_int16 = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
 
-    with wave.open(str(out_path), "wb") as wav_file:
-        wav_file.setnchannels(CHANNELS)
-        wav_file.setsampwidth(SAMPLE_WIDTH)
-        wav_file.setframerate(sr)
-        wav_file.writeframes(audio_int16.tobytes())
+    _write_wav(out_path, audio_int16, sr)
 
-    if cached_wav is not None:
-        try:
-            os.link(out_path, cached_wav)
-        except OSError:
-            shutil.copy2(out_path, cached_wav)
+    if cached_wav:
+        _link_or_copy(out_path, cached_wav)
 
-    return (len(audio_int16) / sr) + AUDIO_DURATION_BUFFER_SECONDS
+    return len(audio_int16) / sr + AUDIO_DURATION_BUFFER_SECONDS
 
 
 class AudioManager:
+    """Manages TTS audio generation and synchronization for Manim scenes."""
+
     def __init__(self, scene: Scene, engine: TTSEngine | None = None) -> None:
         self.i: int = 0
         self.scene = scene
@@ -164,12 +195,14 @@ class AudioManager:
         self.chapters: list[tuple[str, str]] = []
 
     def new_section(self, section_name: str) -> None:
+        """Record a new chapter marker at the current scene time."""
         _audio_log(f": Starting new section - {section_name}")
         time = self.scene.renderer.time
         ts_string = format_timestamp(time)
         self.chapters.append((section_name, ts_string))
 
     def say(self, text: str) -> None:
+        """Generate TTS audio for the given text and record its timing."""
         _audio_log(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
         self.i += 1
         self.times.append(self.scene.renderer.time)
@@ -178,6 +211,7 @@ class AudioManager:
         _audio_log(f"AudioManager: Audio duration is {duration:.2f} seconds")
 
     def done_say(self) -> None:
+        """Wait for the current audio to finish before continuing the scene."""
         if not self.times or not self.audio_durations:
             _audio_log("AudioManager: done_say() called before say(); skipping")
             return
@@ -193,6 +227,7 @@ class AudioManager:
             self.scene.wait(to_sleep)
 
     def merge_audio(self) -> None:
+        """Merge all generated audio clips into a single output file."""
         if self.i == 0:
             _audio_log("AudioManager: No audio files to merge")
             return

@@ -8,7 +8,7 @@ Usage:
 import argparse
 from pathlib import Path
 
-from src.document_selector import DocumentSelectorAgent
+from src.preprocessing import DocumentSelectorAgent
 
 
 def main() -> None:

@@ -1,7 +1,10 @@
 #!/usr/bin/env python
-# Vendored from https://github.com/Aider-AI/aider (Apache-2.0)
-# aider-chat requires Python <3.13; we copy only this file and stub its
-# two aider-internal imports below.
+"""Flexible search-and-replace utilities vendored from aider-chat.
+
+Vendored from https://github.com/Aider-AI/aider (Apache-2.0).
+aider-chat requires Python <3.13; we copy only this file and stub its
+two aider-internal imports below.
+"""
 
 from __future__ import annotations
 
@@ -71,6 +74,7 @@ class RelativeIndenter:
             self.marker = self.select_unique_marker(chars)
 
     def select_unique_marker(self, chars: set[str]) -> str:
+        """Find a Unicode character not present in the given character set."""
         for codepoint in range(0x10FFFF, 0x10000, -1):
             marker = chr(codepoint)
             if marker not in chars:
@@ -137,6 +141,7 @@ class RelativeIndenter:
 
 
 def map_patches(texts: list[str], patches: list, debug: bool) -> list:
+    """Remap patch positions from search text coordinates to original text coordinates."""
     search_text, _, original_text = texts
 
     dmp = diff_match_patch()
@@ -168,6 +173,7 @@ def map_patches(texts: list[str], patches: list, debug: bool) -> list:
 
 
 def relative_indent(texts: list[str]) -> tuple[RelativeIndenter, list[str]]:
+    """Convert texts to relative indentation format."""
     ri = RelativeIndenter(texts)
     texts = list(map(ri.make_relative, texts))
     return ri, texts
@@ -177,17 +183,20 @@ LINE_PADDING = 100
 
 
 def line_pad(text: str) -> str:
+    """Add newline padding before and after text."""
     padding = "\n" * LINE_PADDING
     return padding + text + padding
 
 
 def line_unpad(text: str) -> str | None:
+    """Remove newline padding from text, returning None if padding is invalid."""
     if set(text[:LINE_PADDING] + text[-LINE_PADDING:]) != set("\n"):
         return None
     return text[LINE_PADDING:-LINE_PADDING]
 
 
 def dmp_apply(texts: list[str], remap: bool = True) -> str | None:
+    """Apply diff-match-patch to transform original text using search/replace pair."""
     debug = False
 
     search_text, replace_text, original_text = texts
@@ -251,6 +260,7 @@ def lines_to_chars(lines: str, mapping: list[str]) -> str:
 
 
 def dmp_lines_apply(texts: list[str]) -> str | None:
+    """Apply diff-match-patch at line granularity for better matching."""
     debug = False
 
     for t in texts:
@@ -311,6 +321,7 @@ def dmp_lines_apply(texts: list[str]) -> str | None:
 
 
 def diff_lines(search_text: str, replace_text: str) -> list:
+    """Generate a unified diff between search and replace text at line level."""
     dmp = diff_match_patch()
     dmp.Diff_Timeout = 5
 
@@ -356,6 +367,7 @@ def search_and_replace(texts: list[str]) -> str | None:
 
 
 def git_cherry_pick_osr_onto_o(texts: list[str]) -> str | None:
+    """Apply search/replace via git cherry-pick: O->S->R, then cherry-pick R onto O."""
     if git is None:
         return None
 
@@ -395,6 +407,7 @@ def git_cherry_pick_osr_onto_o(texts: list[str]) -> str | None:
 
 
 def git_cherry_pick_sr_onto_so(texts: list[str]) -> str | None:
+    """Apply search/replace via git cherry-pick: S->R branch, cherry-pick onto S->O."""
     if git is None:
         return None
 
@@ -435,6 +448,8 @@ def git_cherry_pick_sr_onto_so(texts: list[str]) -> str | None:
 
 
 class SearchTextNotUniqueError(ValueError):
+    """Raised when search text matches multiple locations in the original."""
+
     pass
 
 
@@ -501,6 +516,7 @@ def flexible_search_and_replace(
 
 
 def reverse_lines(text: str) -> str:
+    """Reverse the order of lines in text."""
     lines = text.splitlines(keepends=True)
     lines.reverse()
     return "".join(lines)
@@ -511,6 +527,7 @@ def try_strategy(
     strategy: Any,
     preproc: tuple,
 ) -> str | None:
+    """Apply a search/replace strategy with the given preprocessing options."""
     preproc_strip_blank_lines, preproc_relative_indent, preproc_reverse = preproc
     ri = None
 
@@ -536,6 +553,6 @@ def try_strategy(
 
 
 def strip_blank_lines(texts: list[str]) -> list[str]:
-    # strip leading and trailing blank lines
+    """Strip leading and trailing blank lines from each text."""
     texts = [text.strip("\n") + "\n" for text in texts]
     return texts
