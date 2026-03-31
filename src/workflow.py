@@ -3,6 +3,8 @@ Course Generation Workflow
 Orchestrates: Input Processing → Lesson Planning → Script Generation → Render → Merge
 """
 
+import base64
+import binascii
 import hashlib
 import logging
 import os
@@ -44,6 +46,22 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def _try_decode_topic(topic: str) -> tuple[str, bool]:
+    """Auto-detect base64 topics and return (decoded_or_original, was_decoded)."""
+    # Fast-fail: Valid base64 strings (with padding) are always a multiple of 4 in length.
+    # We also check for truthiness to avoid processing empty strings.
+    if not topic or len(topic) % 4 != 0:
+        return topic, False
+
+    try:
+        # validate=True strictly enforces the base64 alphabet, throwing binascii.Error if it fails
+        decoded = base64.b64decode(topic, validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return topic, False
+    else:
+        return decoded, True
+
+
 def _rel(path: Path | str) -> Path:
     """Return path relative to cwd, or absolute if not possible."""
     try:
@@ -54,6 +72,8 @@ def _rel(path: Path | str) -> Path:
 
 def _print_pipeline_header(
     topic: str,
+    prompt_topic: str,
+    topic_was_base64: bool,
     wf: "CourseWorkflow",
     tts_engine: str,
     input_dir: str | None,
@@ -64,6 +84,8 @@ def _print_pipeline_header(
     print("=" * 60)
     print("Starting AI Course Generation Pipeline")
     print(f"Topic:          {topic}")
+    if topic_was_base64:
+        print(f"Prompt topic:   {prompt_topic}")
     print(f"Planner model:  {wf.model}")
     print(f"Script model:   {wf.manim_model}")
     print(f"Review model:   {wf.review_model}")
@@ -257,6 +279,7 @@ class CourseWorkflow:
         user_script_hash: str | None = None,
     ) -> dict[str, Any]:
         slug = lesson_name_to_key(topic)
+        prompt_topic, topic_was_base64 = _try_decode_topic(topic)
         out = Path(output_dir)
         tts_engine = os.environ.get("TTS_ENGINE", DEFAULT_TTS_ENGINE).lower()
 
@@ -272,7 +295,17 @@ class CourseWorkflow:
             topic, input_dir, extra_context=self._build_cache_context(tts_engine, final_quality)
         )
 
-        _print_pipeline_header(topic, self, tts_engine, input_dir, out, script_hash, video_hash)
+        _print_pipeline_header(
+            topic,
+            prompt_topic,
+            topic_was_base64,
+            self,
+            tts_engine,
+            input_dir,
+            out,
+            script_hash,
+            video_hash,
+        )
         tracker = UsageTracker()
 
         # Fast path: cached video
@@ -327,7 +360,7 @@ class CourseWorkflow:
                 preprocessing_usage = batch_process(raw_dir, processed_dir)
                 selector_agent = DocumentSelectorAgent(processed_dir)
 
-                selected, selection_usage = selector_agent.select(topic)
+                selected, selection_usage = selector_agent.select(prompt_topic)
                 tracker.record("Step 0 - Selecting documents", selection_usage)
 
                 cost_str = (
@@ -362,14 +395,14 @@ class CourseWorkflow:
             else:
                 tracker.record("Step 0 - Selecting documents", skipped=True)
 
-            lesson, lesson_usage = self.generate_lesson_plan(topic, input_parts=input_parts)
+            lesson, lesson_usage = self.generate_lesson_plan(prompt_topic, input_parts=input_parts)
             tracker.record("Step 1 - Lesson planning", lesson_usage)
             lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
             lesson_plan_path.write_text(lesson)
             print(f"Lesson plan: {lesson_plan_path}\n")
             script_usage = self.script_generator.generate_and_save(
                 lesson_content=lesson,
-                topic=topic,
+                topic=prompt_topic,
                 output_path=script_path,
                 input_parts=input_parts,
             )
@@ -379,7 +412,14 @@ class CourseWorkflow:
 
         # Step 3: Render + review loop
         final_video = self._render_loop(
-            topic, slug, script_path, out, video_hash, final_quality, skip_review, tracker
+            prompt_topic,
+            slug,
+            script_path,
+            out,
+            video_hash,
+            final_quality,
+            skip_review,
+            tracker,
         )
 
         print()
