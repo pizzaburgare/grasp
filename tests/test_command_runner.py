@@ -24,6 +24,12 @@ class _StuckProcess:
         _ = timeout
         return self.returncode if self.returncode is not None else -9
 
+    def __enter__(self) -> "_StuckProcess":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
+
 
 class _ImmediateProcess:
     def __init__(self) -> None:
@@ -40,6 +46,12 @@ class _ImmediateProcess:
     def wait(self, timeout: float | None = None) -> int:
         _ = timeout
         return self.returncode if self.returncode is not None else -9
+
+    def __enter__(self) -> "_ImmediateProcess":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        pass
 
 
 class _ThreadSpy:
