@@ -18,6 +18,7 @@ from src.workflow import CourseWorkflow
 
 
 def main() -> None:
+    """Parse CLI arguments and run the course video generation workflow."""
     parser = argparse.ArgumentParser(
         description="Generate an AI course lesson video with narration",
         formatter_class=argparse.RawDescriptionHelpFormatter,

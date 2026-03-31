@@ -1,3 +1,5 @@
+"""Text-to-speech engine registry with lazy loading."""
+
 import os
 from typing import TYPE_CHECKING
 

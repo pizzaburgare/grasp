@@ -1,10 +1,15 @@
+"""Rendering pipeline: Manim script execution and audio merging."""
+
 import ast
 import logging
 import os
 import shutil
 import sys
 import time
+import wave
 from pathlib import Path
+
+import numpy as np
 
 from src.core.cache import get_audio_cache_dir, get_lesson_cache_dir, hash_text, save_video_to_cache
 from src.core.command_runner import run_command
@@ -71,10 +76,6 @@ def _presynthesise_audio(
 
     print(f"Audio pre-synthesis: {len(missing)}/{len(texts)} clips need synthesis")
 
-    import wave
-
-    import numpy as np
-
     channels = 1
     sample_width = 2  # 16-bit
 
@@ -105,6 +106,7 @@ def _presynthesise_audio(
 
 
 def detect_scene_class(script_path: Path) -> str:
+    """Detect the main Scene subclass in a Manim script via AST inspection."""
     tree = ast.parse(script_path.read_text())
 
     def _base_name(base: ast.expr) -> str:

@@ -1,3 +1,5 @@
+"""Qwen TTS engine implementation with voice cloning support."""
+
 import logging
 import os
 from pathlib import Path
@@ -24,6 +26,8 @@ _MIN_AUDIO_CHANNELS = 2
 
 
 class QwenTTSEngine(TTSEngine):
+    """TTS engine using Qwen3-TTS models for speech synthesis and voice cloning."""
+
     ENGINE_NAME = "qwen"
 
     def __init__(

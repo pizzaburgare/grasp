@@ -1,3 +1,5 @@
+"""Utilities for extracting topics and pages from PDF documents."""
+
 import re
 import sys
 from pathlib import Path
@@ -34,6 +36,7 @@ def extract_topic_pdf(pdf_path: str, topic_idx: int, output_pdf_path: str) -> No
 
 
 def extract_topic(pdf_path: Path | str, target_topic: str) -> None:
+    """Extracts pages matching target_topic and saves them as a separate PDF."""
     topics = get_toc_topics(pdf_path)
     idx = next(
         (i for i, t in enumerate(topics) if target_topic.lower() in t["title"].lower()),

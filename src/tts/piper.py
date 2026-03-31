@@ -1,3 +1,5 @@
+"""Piper TTS engine implementation for local neural text-to-speech synthesis."""
+
 import io
 import os
 import wave
@@ -13,6 +15,8 @@ _DEFAULT_MODEL = str(PIPER_DEFAULT_MODEL)
 
 
 class PiperTTSEngine(TTSEngine):
+    """TTS engine using Piper for fast, local neural speech synthesis."""
+
     ENGINE_NAME = "piper"
 
     def __init__(self, model_path: str = _DEFAULT_MODEL) -> None:

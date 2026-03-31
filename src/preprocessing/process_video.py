@@ -1,3 +1,5 @@
+"""Video processing: transcription and frame description extraction."""
+
 import base64
 import io
 import tempfile

@@ -184,6 +184,8 @@ def create_wav(text_to_speak: str, i: int, engine: TTSEngine) -> float:
 
 
 class AudioManager:
+    """Manages TTS audio generation and synchronization for Manim scenes."""
+
     def __init__(self, scene: Scene, engine: TTSEngine | None = None) -> None:
         self.i: int = 0
         self.scene = scene
@@ -193,12 +195,14 @@ class AudioManager:
         self.chapters: list[tuple[str, str]] = []
 
     def new_section(self, section_name: str) -> None:
+        """Record a new chapter marker at the current scene time."""
         _audio_log(f": Starting new section - {section_name}")
         time = self.scene.renderer.time
         ts_string = format_timestamp(time)
         self.chapters.append((section_name, ts_string))
 
     def say(self, text: str) -> None:
+        """Generate TTS audio for the given text and record its timing."""
         _audio_log(f"AudioManager: {text} at {self.scene.renderer.time:.2f} seconds")
         self.i += 1
         self.times.append(self.scene.renderer.time)
@@ -207,6 +211,7 @@ class AudioManager:
         _audio_log(f"AudioManager: Audio duration is {duration:.2f} seconds")
 
     def done_say(self) -> None:
+        """Wait for the current audio to finish before continuing the scene."""
         if not self.times or not self.audio_durations:
             _audio_log("AudioManager: done_say() called before say(); skipping")
             return
@@ -222,6 +227,7 @@ class AudioManager:
             self.scene.wait(to_sleep)
 
     def merge_audio(self) -> None:
+        """Merge all generated audio clips into a single output file."""
         if self.i == 0:
             _audio_log("AudioManager: No audio files to merge")
             return

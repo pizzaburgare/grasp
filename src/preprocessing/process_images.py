@@ -1,3 +1,5 @@
+"""Image preprocessing and LLM-based transcription to Markdown."""
+
 import base64
 import io
 
@@ -76,6 +78,7 @@ def image_to_md_llm(
 
 
 def convert_image_to_md(input_file: str, output_file: str) -> LLMUsage | None:
+    """Convert an image file to Markdown and save to output_file."""
     return image_to_md_llm(input_file, output_file)
 
 

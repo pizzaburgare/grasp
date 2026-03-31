@@ -1,3 +1,5 @@
+"""TTS engine implementation using Kokoro text-to-speech."""
+
 import os
 from typing import Any
 
@@ -12,6 +14,8 @@ _DEFAULT_SPEED_ = 1.2
 
 
 class KokoroTTSEngine(TTSEngine):
+    """TTS engine using the Kokoro-82M model for speech synthesis."""
+
     ENGINE_NAME = "kokoro"
 
     def __init__(

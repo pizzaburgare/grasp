@@ -73,6 +73,8 @@ class _Selection(BaseModel):
 
 
 class DocumentSelectorAgent:
+    """Agent that selects relevant documents from a directory for a given topic."""
+
     def __init__(self, base_dir: Path, model: str | None = None) -> None:
         self.base_dir = base_dir.resolve()
         self._llm = make_openrouter_llm(model or DOCUMENT_SELECTOR_MODEL, title="Document Selector")

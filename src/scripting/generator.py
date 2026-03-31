@@ -81,6 +81,7 @@ class ManimScriptGenerator:
         topic: str,
         input_parts: list[dict[str, Any]] | None = None,
     ) -> tuple[str, LLMUsage]:
+        """Generate a Manim script from lesson content using the LLM."""
         text = f"""Topic: {topic}
 
 Lesson Content:
@@ -146,6 +147,7 @@ Generate a complete Manim script that:
         output_path: str | Path,
         input_parts: list[dict[str, Any]] | None = None,
     ) -> LLMUsage:
+        """Generate a Manim script and save it to the specified path."""
         print(f"Generating Manim script ({self.model}) ...")
         script, usage = self.generate_script(lesson_content, topic, input_parts)
         out = Path(output_path)

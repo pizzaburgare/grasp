@@ -1,3 +1,5 @@
+"""Abstract base class for text-to-speech engines."""
+
 from abc import ABC, abstractmethod
 from typing import Self
 
@@ -5,11 +7,12 @@ import numpy as np
 
 
 class TTSEngine(ABC):
+    """Base interface for TTS engines that convert text to audio."""
+
     @classmethod
     @abstractmethod
     def from_env(cls) -> Self:
         """Instantiate this engine from environment variables."""
-        ...
 
     @abstractmethod
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
@@ -18,7 +21,6 @@ class TTSEngine(ABC):
         Returns:
             (audio_float32_mono, sample_rate)
         """
-        ...
 
     def synthesize_batch(self, texts: list[str]) -> list[tuple[np.ndarray, int]]:
         """Synthesize multiple texts. Default falls back to sequential calls.

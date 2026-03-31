@@ -49,6 +49,7 @@ class UsageTracker:
         self._steps: list[tuple[str, LLMUsage | None, bool]] = []
 
     def record(self, label: str, usage: LLMUsage | None = None, *, skipped: bool = False) -> None:
+        """Record a step's LLM usage and print it inline."""
         self._steps.append((label, usage, skipped))
         if skipped:
             print(f"{label}: skipped (cache)")
@@ -63,6 +64,7 @@ class UsageTracker:
             )
 
     def summarize(self) -> dict[str, Any]:
+        """Print usage summary and return aggregated totals."""
         total_prompt = total_completion = total_tokens = 0
         known_cost = 0.0
         has_unknown = False
