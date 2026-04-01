@@ -48,7 +48,9 @@ class ManimScriptGenerator:
         self.llm = make_openrouter_llm(
             generation_model, title="Manim Script Generator", temperature=0.7
         )
-        self.review_llm = make_openrouter_llm(review_model, title="Manim Video Reviewer")
+        self.review_llm = make_openrouter_llm(
+            review_model, title="Manim Video Reviewer", temperature=0.0
+        )
         self.fix_llm = make_openrouter_llm(fix_model, title="Manim Video Fixer")
 
         with open(MANIM_PROMPT, encoding="utf-8") as f:

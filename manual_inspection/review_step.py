@@ -404,7 +404,7 @@ def main() -> None:
     parser.add_argument(
         "--algorithm",
         choices=["settled-ssim", "brightness-peaks"],
-        default="settled-ssim",
+        default="brightness-peaks",
         help=(
             "Frame extraction algorithm: 'settled-ssim' (default production flow) "
             "or 'brightness-peaks' (1-second samples, keep local lightness maxima)."
