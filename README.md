@@ -149,6 +149,19 @@ uv run lesson "Kendall's notation" --input-dir ./courses/kosys --script-hash 641
 | `--final` | off | Render at high quality (`-qh`) instead of low (`-ql`) |
 | `--script-hash` | auto | Reuse a specific cached script hash to test rendering without regenerating the lesson plan/script |
 
+### Create a Course Lesson Plan
+
+Generate a course-wide lesson plan from a course folder (must contain a `raw/` subdirectory):
+
+```bash
+uv run src/planning/course_planner.py courses/FMNF05
+```
+
+This command will:
+- preprocess files from `courses/FMNF05/raw` into `courses/FMNF05/processed`,
+- generate a structured course plan with topics/subtopics,
+- write the result to `./output/course_plan.yml`.
+
 ### Run All Lessons Sequentially
 
 To run every subtopic in a course plan one by one (each in a fresh process):
