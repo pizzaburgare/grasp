@@ -35,6 +35,7 @@ dependencies = [
 
 [project.scripts]
 lesson = "src.cli:main"
+lesson-all = "src.run_all_lessons:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
@@ -47,7 +48,9 @@ dev = [
     "pyright>=1.1.0",
     "ruff>=0.15.4",
     "types-pyyaml>=6.0.12.20250915",
-    "pylint>=4.0.5"
+    "pylint>=4.0.5",
+    "packaging>=26.0",
+
 ]
 
 # Deptry

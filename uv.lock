@@ -64,6 +64,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "deptry" },
+    { name = "packaging" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pyright" },
@@ -100,6 +101,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "deptry", specifier = ">=0.25.1" },
+    { name = "packaging", specifier = ">=26.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pylint", specifier = ">=4.0.5" },
     { name = "pyright", specifier = ">=1.1.0" },

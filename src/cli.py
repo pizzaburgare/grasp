@@ -42,7 +42,7 @@ def _load_subtopic_from_plan(plan_path: Path, subtopic_id: str) -> tuple[str, st
         print(f"Available IDs: {', '.join(available_ids)}", file=sys.stderr)
         sys.exit(1)
 
-    return subtopic.name, subtopic.description
+    return subtopic_id + "_" + subtopic.name, subtopic.description
 
 
 def main() -> None:
