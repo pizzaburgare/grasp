@@ -50,7 +50,6 @@ dependencies = [
     { name = "moviepy" },
     { name = "numpy" },
     { name = "openai-whisper" },
-    { name = "packaging" },
     { name = "pillow" },
     { name = "piper-tts" },
     { name = "pydantic" },
@@ -65,6 +64,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "deptry" },
+    { name = "packaging" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pyright" },
@@ -87,7 +87,6 @@ requires-dist = [
     { name = "moviepy", specifier = ">=2.2.1" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "openai-whisper", specifier = ">=20250625" },
-    { name = "packaging", specifier = ">=26.0" },
     { name = "pillow", specifier = ">=9.2.0,<12.0" },
     { name = "piper-tts", specifier = ">=1.4.1" },
     { name = "pydantic", specifier = ">=2.11.7" },
@@ -102,6 +101,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "deptry", specifier = ">=0.25.1" },
+    { name = "packaging", specifier = ">=26.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pylint", specifier = ">=4.0.5" },
     { name = "pyright", specifier = ">=1.1.0" },
