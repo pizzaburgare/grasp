@@ -31,7 +31,6 @@ dependencies = [
     "gitpython>=3.1.46",
     "pylint>=4.0.5",
     "en-core-web-sm",
-    "packaging>=26.0",
 ]
 
 [project.scripts]
@@ -49,7 +48,9 @@ dev = [
     "pyright>=1.1.0",
     "ruff>=0.15.4",
     "types-pyyaml>=6.0.12.20250915",
-    "pylint>=4.0.5"
+    "pylint>=4.0.5",
+    "packaging>=26.0",
+
 ]
 
 # Deptry
