@@ -35,6 +35,7 @@ dependencies = [
 
 [project.scripts]
 lesson = "src.cli:main"
+lesson-all = "src.run_all_lessons:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

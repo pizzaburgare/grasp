@@ -149,6 +149,20 @@ uv run lesson "Kendall's notation" --input-dir ./courses/kosys --script-hash 641
 | `--final` | off | Render at high quality (`-qh`) instead of low (`-ql`) |
 | `--script-hash` | auto | Reuse a specific cached script hash to test rendering without regenerating the lesson plan/script |
 
+### Run All Lessons Sequentially
+
+To run every subtopic in a course plan one by one (each in a fresh process):
+
+```bash
+uv run lesson-all --lesson-plan ./output/course_plan.yml
+```
+
+Useful flags are forwarded to each lesson run:
+
+```bash
+uv run lesson-all --lesson-plan ./output/course_plan.yml --input-dir ./courses/kosys --final --continue-on-error
+```
+
 ### Supported Input Formats
 
 Place reference materials in the input directory. All formats are converted to LLM-ready content automatically:
