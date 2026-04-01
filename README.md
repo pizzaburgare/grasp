@@ -163,6 +163,14 @@ Useful flags are forwarded to each lesson run:
 uv run lesson-all --lesson-plan ./output/course_plan.yml --input-dir ./courses/kosys --final --continue-on-error
 ```
 
+Start from a specific lesson ID and skip all earlier lessons:
+
+```bash
+uv run lesson-all --lesson-plan ./output/course_plan.yml --min-lesson 2.3
+```
+
+Before running, the command prints the exact lesson IDs that will be generated.
+
 ### Supported Input Formats
 
 Place reference materials in the input directory. All formats are converted to LLM-ready content automatically:

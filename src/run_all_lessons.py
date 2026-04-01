@@ -13,6 +13,13 @@ import yaml
 from src.planning.models import CoursePlan
 
 
+def _parse_lesson_id(lesson_id: str) -> tuple[int, ...]:
+    parts = lesson_id.split(".")
+    if not parts or any(not part.isdigit() for part in parts):
+        raise ValueError(f"Invalid lesson ID format: {lesson_id}")
+    return tuple(int(part) for part in parts)
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -70,6 +77,13 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Continue with remaining lessons if one lesson fails",
     )
+    parser.add_argument(
+        "--min-lesson",
+        type=str,
+        default=None,
+        metavar="ID",
+        help="Skip lessons before this lesson ID (e.g. 2.3)",
+    )
     return parser.parse_args()
 
 
@@ -118,11 +132,27 @@ def main() -> None:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
+    if args.min_lesson is not None:
+        try:
+            min_lesson_key = _parse_lesson_id(args.min_lesson)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        subtopic_ids = [
+            subtopic_id
+            for subtopic_id in subtopic_ids
+            if _parse_lesson_id(subtopic_id) >= min_lesson_key
+        ]
+
     if not subtopic_ids:
         print("No subtopics found in lesson plan.", file=sys.stderr)
         sys.exit(1)
 
     print(f"Found {len(subtopic_ids)} lessons in {args.lesson_plan}")
+    print("Lessons to generate:")
+    for subtopic_id in subtopic_ids:
+        print(f"- {subtopic_id}")
 
     failures: list[tuple[str, int]] = []
 
