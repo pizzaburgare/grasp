@@ -51,6 +51,7 @@ class PipelineContext(TypedDict):
 
     topic: str
     prompt_topic: str
+    lesson_context: str | None
     slug: str
     input_dir: str | None
     out: Path
@@ -155,6 +156,7 @@ class CourseWorkflow:
         self,
         topic: str,
         input_parts: list[dict[str, Any]] | None = None,
+        lesson_context: str | None = None,
     ) -> tuple[str, LLMUsage]:
         """Generate a lesson plan for the given topic using the planner LLM."""
         print(f"Generating lesson plan for: {topic}")
@@ -166,16 +168,21 @@ class CourseWorkflow:
 
         system_content = self.lesson_prompt_template.replace("<topic>", topic)
 
+        # Build the user message
+        topic_text = f"Create a lesson plan for: {topic}"
+        if lesson_context:
+            topic_text += f"\n\nLesson context: {lesson_context}"
+
         if input_parts:
             user_content: list[str | dict[str, Any]] | str = [
                 {
                     "type": "text",
-                    "text": f"Create a lesson plan for: {topic}\n\nHere are reference materials:",
+                    "text": f"{topic_text}\n\nHere are reference materials:",
                 },
                 *input_parts,
             ]
         else:
-            user_content = f"Create a lesson plan for: {topic}"
+            user_content = topic_text
 
         messages = [
             SystemMessage(content=system_content),
@@ -355,6 +362,7 @@ class CourseWorkflow:
         """Generate or load cached lesson plan and script. Returns (script_path, lesson)."""
         slug, script_hash = ctx["slug"], ctx["script_hash"]
         prompt_topic, input_dir = ctx["prompt_topic"], ctx["input_dir"]
+        lesson_context = ctx["lesson_context"]
 
         script_path = get_lesson_cache_dir(slug) / "script" / f"{script_hash}.py"
         lesson_plan_path = script_path.with_suffix(".md")
@@ -372,7 +380,9 @@ class CourseWorkflow:
         else:
             tracker.record("Step 0 - Selecting documents", skipped=True)
 
-        lesson, lesson_usage = self.generate_lesson_plan(prompt_topic, input_parts=input_parts)
+        lesson, lesson_usage = self.generate_lesson_plan(
+            prompt_topic, input_parts=input_parts, lesson_context=lesson_context
+        )
         tracker.record("Step 1 - Lesson planning", lesson_usage)
         lesson_plan_path.parent.mkdir(parents=True, exist_ok=True)
         lesson_plan_path.write_text(lesson)
@@ -396,6 +406,7 @@ class CourseWorkflow:
         final_quality: bool = False,
         skip_review: bool = False,
         user_script_hash: str | None = None,
+        lesson_context: str | None = None,
     ) -> dict[str, Any]:
         """Run the complete course generation pipeline from topic to final video."""
         prompt_topic, _ = _try_decode_topic(topic)
@@ -407,6 +418,7 @@ class CourseWorkflow:
         ctx: PipelineContext = {
             "topic": topic,
             "prompt_topic": prompt_topic,
+            "lesson_context": lesson_context,
             "slug": lesson_name_to_key(topic),
             "input_dir": input_dir,
             "out": Path(output_dir),
