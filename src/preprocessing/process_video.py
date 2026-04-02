@@ -109,11 +109,11 @@ def _merge_transcription_and_frames(
     combined.sort(key=lambda x: x[0])
 
     lines: list[str] = []
-    for ts, kind, content in combined:
+    for _, kind, content in combined:
         if kind == "transcript":
-            lines.append(f"[{ts:.2f}s] {content}")
+            lines.append(f"{content}")
         else:
-            lines.append(f"[{ts:.2f}s] [VISUAL] {content}")
+            lines.append(f"[VISUAL] {content}")
     return "\n".join(lines)
 
 
